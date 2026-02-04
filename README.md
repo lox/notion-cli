@@ -27,19 +27,19 @@ task build
 
 ```bash
 # Authenticate with Notion (opens browser for OAuth)
-notion config auth
+notion-cli config auth
 
 # Search your workspace
-notion search "meeting notes"
+notion-cli search "meeting notes"
 
 # View a page
-notion page view "https://notion.so/My-Page-abc123"
+notion-cli page view "https://notion.so/My-Page-abc123"
 
 # List your pages
-notion page list
+notion-cli page list
 
 # Create a page
-notion page create --title "New Page" --content "# Hello World"
+notion-cli page create --title "New Page" --content "# Hello World"
 ```
 
 ## Commands
@@ -47,72 +47,71 @@ notion page create --title "New Page" --content "# Hello World"
 ### Configuration
 
 ```bash
-notion config auth     # Run OAuth flow to authenticate
-notion config show     # Show current configuration
-notion config clear    # Clear stored credentials
+notion-cli config auth     # Run OAuth flow to authenticate
+notion-cli config show     # Show current configuration
+notion-cli config clear    # Clear stored credentials
 ```
 
 ### Pages
 
 ```bash
-notion page list                           # List pages
-notion page list --limit 50                # Limit results
-notion page list --json                    # Output as JSON
+notion-cli page list                           # List pages
+notion-cli page list --limit 50                # Limit results
+notion-cli page list --json                    # Output as JSON
 
-notion page view <url>                     # View page content
-notion page view <url> --json              # Output as JSON
+notion-cli page view <url>                     # View page content
+notion-cli page view <url> --json              # Output as JSON
 
-notion page create --title "Title"         # Create a page
-notion page create --title "T" --content "Body text"
-notion page create --title "T" --parent <page-id>
+notion-cli page create --title "Title"         # Create a page
+notion-cli page create --title "T" --content "Body text"
+notion-cli page create --title "T" --parent <page-id>
 ```
 
 ### Search
 
 ```bash
-notion search "query"                      # Search workspace
-notion search "query" --limit 10           # Limit results
-notion search "query" --json               # Output as JSON
+notion-cli search "query"                      # Search workspace
+notion-cli search "query" --limit 10           # Limit results
+notion-cli search "query" --json               # Output as JSON
 ```
 
 ### Databases
 
 ```bash
-notion db list                             # List databases
-notion db list --json                      # Output as JSON
+notion-cli db list                             # List databases
+notion-cli db list --json                      # Output as JSON
 
-notion db query <database-id>              # Query database
-notion db query <id> --json                # Output as JSON
+notion-cli db query <database-id>              # Query database
+notion-cli db query <id> --json                # Output as JSON
 ```
 
 ### Comments
 
 ```bash
-notion comment list <page-id>              # List comments on a page
-notion comment list <page-id> --json       # Output as JSON
+notion-cli comment list <page-id>              # List comments on a page
+notion-cli comment list <page-id> --json       # Output as JSON
 
-notion comment create <page-id> --content "Comment text"
+notion-cli comment create <page-id> --content "Comment text"
 ```
 
 ### Other
 
 ```bash
-notion version                             # Show version
-notion --help                              # Show help
+notion-cli version                             # Show version
+notion-cli --help                              # Show help
 ```
 
 ## Configuration
 
 Configuration is stored at `~/.config/notion-cli/config.json`.
 
-The CLI uses Notion's remote MCP server with OAuth authentication. On first run, `notion config auth` will open your browser to authorize the CLI with your Notion workspace.
+The CLI uses Notion's remote MCP server with OAuth authentication. On first run, `notion-cli config auth` will open your browser to authorize the CLI with your Notion workspace.
 
 ## Environment Variables
 
 | Variable | Description |
 |----------|-------------|
-| `NOTION_TOKEN` | OAuth token (overrides config file) |
-| `NOTION_CLI_CONFIG` | Custom config file path |
+| `NOTION_ACCESS_TOKEN` | Access token for CI/headless usage (skips OAuth) |
 
 ## How It Works
 
