@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -76,14 +77,15 @@ func filterPages(results []mcp.SearchResult, limit int) []output.Page {
 type PageViewCmd struct {
 	URL  string `arg:"" help:"Page URL or ID"`
 	JSON bool   `help:"Output as JSON" short:"j"`
+	Raw  bool   `help:"Output raw Notion response without formatting" short:"r"`
 }
 
 func (c *PageViewCmd) Run(ctx *Context) error {
 	ctx.JSON = c.JSON
-	return runPageView(ctx, c.URL)
+	return runPageView(ctx, c.URL, c.Raw)
 }
 
-func runPageView(ctx *Context, url string) error {
+func runPageView(ctx *Context, url string, raw bool) error {
 	client, err := cli.RequireClient()
 	if err != nil {
 		return err
@@ -99,6 +101,11 @@ func runPageView(ctx *Context, url string) error {
 
 	if result.Content == "" {
 		output.PrintWarning("No content found")
+		return nil
+	}
+
+	if raw {
+		fmt.Println(result.Content)
 		return nil
 	}
 
