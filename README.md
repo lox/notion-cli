@@ -108,7 +108,7 @@ Configuration is stored at `~/.config/notion-cli/config.json`.
 
 The CLI uses Notion's remote MCP server with OAuth authentication. On first run, `notion-cli auth login` will open your browser to authorize the CLI with your Notion workspace.
 
-**Note:** Access tokens expire after 1 hour. The CLI stores a refresh token that can be used to obtain new access tokens without re-authenticating. Run `notion-cli auth refresh` to refresh manually, or the CLI will attempt to refresh automatically when needed.
+**Note:** Access tokens expire after 1 hour. The CLI automatically refreshes tokens when they expire or are about to expire, so you typically don't need to think about this. Use `notion-cli auth refresh` to manually refresh if needed.
 
 ## Environment Variables
 
