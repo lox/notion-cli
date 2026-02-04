@@ -102,7 +102,7 @@ func runPageView(ctx *Context, url string) error {
 		return nil
 	}
 
-	return output.RenderMarkdown(result.Content)
+	return output.RenderPage(result.Content)
 }
 
 type PageCreateCmd struct {
