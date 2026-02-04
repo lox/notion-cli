@@ -162,21 +162,88 @@ func parseNotionResponse(content string) (*pageMetadata, string) {
 		return meta, body
 	}
 
-	// Check for database title
-	if strings.Contains(content, "The title of this Database is:") {
-		lines := strings.Split(content, "\n")
-		for _, line := range lines {
-			if strings.HasPrefix(line, "The title of this Database is:") {
-				meta.Title = strings.TrimSpace(strings.TrimPrefix(line, "The title of this Database is:"))
-				meta.Type = "database"
-				break
+	// Check for database
+	if strings.Contains(content, "<database") {
+		meta.Type = "database"
+		// Extract title
+		if strings.Contains(content, "The title of this Database is:") {
+			lines := strings.Split(content, "\n")
+			for _, line := range lines {
+				if strings.HasPrefix(line, "The title of this Database is:") {
+					meta.Title = strings.TrimSpace(strings.TrimPrefix(line, "The title of this Database is:"))
+					break
+				}
 			}
 		}
-		return meta, content
+		// Format database content nicely
+		body := formatDatabaseContent(content)
+		return meta, body
 	}
 
 	// Fallback: return raw content
 	return meta, content
+}
+
+func formatDatabaseContent(content string) string {
+	var out strings.Builder
+
+	// Extract and format schema
+	if start := strings.Index(content, "<data-source-state>"); start != -1 {
+		if end := strings.Index(content[start:], "</data-source-state>"); end != -1 {
+			stateJSON := strings.TrimSpace(content[start+len("<data-source-state>") : start+end])
+			var state struct {
+				Name   string `json:"name"`
+				Schema map[string]struct {
+					Name    string `json:"name"`
+					Type    string `json:"type"`
+					Options []struct {
+						Name string `json:"name"`
+					} `json:"options,omitempty"`
+				} `json:"schema"`
+			}
+			if err := json.Unmarshal([]byte(stateJSON), &state); err == nil {
+				out.WriteString("## Schema\n\n")
+				out.WriteString("| Column | Type |\n")
+				out.WriteString("|--------|------|\n")
+				for _, prop := range state.Schema {
+					typeStr := prop.Type
+					if len(prop.Options) > 0 {
+						opts := make([]string, 0, len(prop.Options))
+						for _, opt := range prop.Options {
+							opts = append(opts, opt.Name)
+						}
+						typeStr = fmt.Sprintf("%s (%s)", prop.Type, strings.Join(opts, ", "))
+					}
+					out.WriteString(fmt.Sprintf("| %s | %s |\n", prop.Name, typeStr))
+				}
+				out.WriteString("\n")
+			}
+		}
+	}
+
+	// Extract and format views
+	if strings.Contains(content, "<views>") {
+		out.WriteString("## Views\n\n")
+		viewRe := regexp.MustCompile(`<view url="[^"]*">`)
+		viewStarts := viewRe.FindAllStringIndex(content, -1)
+		for _, loc := range viewStarts {
+			start := loc[1]
+			end := strings.Index(content[start:], "</view>")
+			if end != -1 {
+				viewJSON := strings.TrimSpace(content[start : start+end])
+				var view struct {
+					Name string `json:"name"`
+					Type string `json:"type"`
+				}
+				if err := json.Unmarshal([]byte(viewJSON), &view); err == nil {
+					out.WriteString(fmt.Sprintf("- **%s** (%s)\n", view.Name, view.Type))
+				}
+			}
+		}
+		out.WriteString("\n")
+	}
+
+	return out.String()
 }
 
 func cleanNotionMarkup(content string) string {
