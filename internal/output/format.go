@@ -168,6 +168,19 @@ func PrintWarning(message string) {
 	fmt.Println(message)
 }
 
+func PrintInfo(message string) {
+	infoStyle := color.New(color.Faint)
+	infoStyle.Println(message)
+}
+
+type UserError struct {
+	Message string
+}
+
+func (e *UserError) Error() string {
+	return e.Message
+}
+
 func printJSON(v any) error {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")

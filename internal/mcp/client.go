@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/client/transport"
@@ -198,43 +199,67 @@ func (c *Client) Fetch(ctx context.Context, id string) (*FetchResult, error) {
 }
 
 type CreatePageRequest struct {
-	ParentPageID     string         `json:"parent_page_id,omitempty"`
-	ParentDatabaseID string         `json:"parent_database_id,omitempty"`
-	Title            string         `json:"title,omitempty"`
-	Properties       map[string]any `json:"properties,omitempty"`
-	Content          string         `json:"content,omitempty"`
+	ParentPageID     string
+	ParentDatabaseID string
+	Title            string
+	Content          string
 }
 
-func (c *Client) CreatePage(ctx context.Context, req CreatePageRequest) (*Page, error) {
-	args := make(map[string]any)
-	if req.ParentPageID != "" {
-		args["parent_page_id"] = req.ParentPageID
-	}
-	if req.ParentDatabaseID != "" {
-		args["parent_database_id"] = req.ParentDatabaseID
-	}
-	if req.Title != "" {
-		args["title"] = req.Title
-	}
-	if req.Properties != nil {
-		args["properties"] = req.Properties
-	}
-	if req.Content != "" {
-		args["content"] = req.Content
+type CreatePageResponse struct {
+	URL string `json:"url"`
+	ID  string `json:"id"`
+}
+
+func (c *Client) CreatePage(ctx context.Context, req CreatePageRequest) (*CreatePageResponse, error) {
+	pageSpec := map[string]any{
+		"properties": map[string]any{
+			"title": req.Title,
+		},
 	}
 
-	result, err := c.CallTool(ctx, "notion-create-page", args)
+	if req.Content != "" {
+		pageSpec["content"] = req.Content
+	}
+
+	args := map[string]any{
+		"pages": []any{pageSpec},
+	}
+
+	if req.ParentPageID != "" {
+		args["parent"] = map[string]any{
+			"page_id": req.ParentPageID,
+		}
+	} else if req.ParentDatabaseID != "" {
+		args["parent"] = map[string]any{
+			"data_source_id": req.ParentDatabaseID,
+		}
+	}
+
+	result, err := c.CallTool(ctx, "notion-create-pages", args)
 	if err != nil {
 		return nil, err
 	}
 
 	text := extractText(result)
-	var page Page
-	if err := json.Unmarshal([]byte(text), &page); err != nil {
-		return nil, fmt.Errorf("parse page: %w", err)
+
+	var resp CreatePageResponse
+	if err := json.Unmarshal([]byte(text), &resp); err == nil && resp.URL != "" {
+		return &resp, nil
 	}
 
-	return &page, nil
+	url := extractURLFromText(text)
+	return &CreatePageResponse{URL: url}, nil
+}
+
+func extractURLFromText(text string) string {
+	if idx := strings.Index(text, "https://www.notion.so/"); idx >= 0 {
+		end := idx
+		for end < len(text) && text[end] != ' ' && text[end] != '\n' && text[end] != '"' && text[end] != ')' && text[end] != '>' {
+			end++
+		}
+		return text[idx:end]
+	}
+	return ""
 }
 
 type GetCommentsRequest struct {

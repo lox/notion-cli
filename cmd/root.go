@@ -10,6 +10,7 @@ type CLI struct {
 	Search  SearchCmd  `cmd:"" help:"Search Notion"`
 	DB      DBCmd      `cmd:"" name:"db" help:"Database commands"`
 	Comment CommentCmd `cmd:"" help:"Comment commands"`
+	Tools   ToolsCmd   `cmd:"" help:"List available MCP tools"`
 	Version VersionCmd `cmd:"" help:"Show version"`
 }
 
