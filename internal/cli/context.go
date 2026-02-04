@@ -8,8 +8,19 @@ import (
 	"github.com/lox/notion-cli/internal/output"
 )
 
+var accessToken string
+
+func SetAccessToken(token string) {
+	accessToken = token
+}
+
 func GetClient() (*mcp.Client, error) {
-	client, err := mcp.NewClient()
+	var opts []mcp.ClientOption
+	if accessToken != "" {
+		opts = append(opts, mcp.WithAccessToken(accessToken))
+	}
+
+	client, err := mcp.NewClient(opts...)
 	if err != nil {
 		return nil, fmt.Errorf("create client: %w", err)
 	}

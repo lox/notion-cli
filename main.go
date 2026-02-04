@@ -5,19 +5,21 @@ import (
 
 	"github.com/alecthomas/kong"
 	"github.com/lox/notion-cli/cmd"
+	"github.com/lox/notion-cli/internal/cli"
 )
 
 var version = "dev"
 
 func main() {
-	cli := &cmd.CLI{}
-	ctx := kong.Parse(cli,
+	c := &cmd.CLI{}
+	ctx := kong.Parse(c,
 		kong.Name("notion"),
 		kong.Description("A CLI for Notion"),
 		kong.UsageOnError(),
 		kong.Vars{"version": version},
 	)
-	err := ctx.Run(&cmd.Context{})
+	cli.SetAccessToken(c.Token)
+	err := ctx.Run(&cmd.Context{Token: c.Token})
 	ctx.FatalIfErrorf(err)
 	os.Exit(0)
 }

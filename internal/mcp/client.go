@@ -24,12 +24,19 @@ type Client struct {
 type ClientOption func(*clientConfig)
 
 type clientConfig struct {
-	endpoint string
+	endpoint    string
+	accessToken string
 }
 
 func WithEndpoint(endpoint string) ClientOption {
 	return func(c *clientConfig) {
 		c.endpoint = endpoint
+	}
+}
+
+func WithAccessToken(token string) ClientOption {
+	return func(c *clientConfig) {
+		c.accessToken = token
 	}
 }
 
@@ -46,8 +53,14 @@ func NewClient(opts ...ClientOption) (*Client, error) {
 		return nil, fmt.Errorf("create token store: %w", err)
 	}
 
+	// If access token provided directly, use a static token store
+	var store transport.TokenStore = tokenStore
+	if cfg.accessToken != "" {
+		store = &staticTokenStore{token: cfg.accessToken}
+	}
+
 	oauthConfig := transport.OAuthConfig{
-		TokenStore:  tokenStore,
+		TokenStore:  store,
 		PKCEEnabled: true,
 	}
 
@@ -364,6 +377,22 @@ func (c *Client) CreateComment(ctx context.Context, req CreateCommentRequest) (*
 	}
 
 	return &comment, nil
+}
+
+// staticTokenStore provides a token from a fixed string (for CI/env var usage)
+type staticTokenStore struct {
+	token string
+}
+
+func (s *staticTokenStore) GetToken(ctx context.Context) (*transport.Token, error) {
+	return &transport.Token{
+		AccessToken: s.token,
+		TokenType:   "Bearer",
+	}, nil
+}
+
+func (s *staticTokenStore) SaveToken(ctx context.Context, token *transport.Token) error {
+	return nil // no-op for static tokens
 }
 
 func extractText(result *mcp.CallToolResult) string {

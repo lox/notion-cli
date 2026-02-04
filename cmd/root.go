@@ -1,11 +1,14 @@
 package cmd
 
 type Context struct {
-	JSON bool
+        JSON  bool
+        Token string
 }
 
 type CLI struct {
-	Config  ConfigCmd  `cmd:"" help:"Configure authentication"`
+        Token string `help:"Access token (skips OAuth)" env:"NOTION_ACCESS_TOKEN" hidden:""`
+
+        Config  ConfigCmd  `cmd:"" help:"Configure authentication"`
 	Page    PageCmd    `cmd:"" help:"Page commands"`
 	Search  SearchCmd  `cmd:"" help:"Search Notion"`
 	DB      DBCmd      `cmd:"" name:"db" help:"Database commands"`
