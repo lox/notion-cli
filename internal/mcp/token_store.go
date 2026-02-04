@@ -76,12 +76,19 @@ func (s *FileTokenStore) SaveToken(ctx context.Context, token *transport.Token) 
 		return err
 	}
 
+	// Preserve existing client_id if present
+	var existing storedToken
+	if data, err := os.ReadFile(s.path); err == nil {
+		_ = json.Unmarshal(data, &existing)
+	}
+
 	stored := storedToken{
 		AccessToken:  token.AccessToken,
 		TokenType:    token.TokenType,
 		RefreshToken: token.RefreshToken,
 		ExpiresAt:    token.ExpiresAt,
 		SavedAt:      time.Now(),
+		ClientID:     existing.ClientID,
 	}
 
 	data, err := json.MarshalIndent(stored, "", "  ")
@@ -112,4 +119,58 @@ type storedToken struct {
 	RefreshToken string    `json:"refresh_token,omitempty"`
 	ExpiresAt    time.Time `json:"expires_at,omitempty"`
 	SavedAt      time.Time `json:"saved_at,omitempty"`
+	ClientID     string    `json:"client_id,omitempty"`
+}
+
+func (s *FileTokenStore) GetClientID(ctx context.Context) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	data, err := os.ReadFile(s.path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", err
+	}
+
+	var stored storedToken
+	if err := json.Unmarshal(data, &stored); err != nil {
+		return "", err
+	}
+
+	return stored.ClientID, nil
+}
+
+func (s *FileTokenStore) SaveClientID(ctx context.Context, clientID string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	dir := filepath.Dir(s.path)
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return err
+	}
+
+	var stored storedToken
+	data, err := os.ReadFile(s.path)
+	if err == nil {
+		_ = json.Unmarshal(data, &stored)
+	}
+
+	stored.ClientID = clientID
+
+	data, err = json.MarshalIndent(stored, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(s.path, data, 0600)
 }

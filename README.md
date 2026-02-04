@@ -27,7 +27,7 @@ task build
 
 ```bash
 # Authenticate with Notion (opens browser for OAuth)
-notion-cli config auth
+notion-cli auth login
 
 # Search your workspace
 notion-cli search "meeting notes"
@@ -44,12 +44,13 @@ notion-cli page create --title "New Page" --content "# Hello World"
 
 ## Commands
 
-### Configuration
+### Authentication
 
 ```bash
-notion-cli config auth     # Run OAuth flow to authenticate
-notion-cli config show     # Show current configuration
-notion-cli config clear    # Clear stored credentials
+notion-cli auth login      # Authenticate with Notion via OAuth
+notion-cli auth refresh    # Refresh the access token
+notion-cli auth status     # Show authentication status
+notion-cli auth logout     # Clear stored credentials
 ```
 
 ### Pages
@@ -105,7 +106,9 @@ notion-cli --help                              # Show help
 
 Configuration is stored at `~/.config/notion-cli/config.json`.
 
-The CLI uses Notion's remote MCP server with OAuth authentication. On first run, `notion-cli config auth` will open your browser to authorize the CLI with your Notion workspace.
+The CLI uses Notion's remote MCP server with OAuth authentication. On first run, `notion-cli auth login` will open your browser to authorize the CLI with your Notion workspace.
+
+**Note:** Access tokens expire after 1 hour. The CLI stores a refresh token that can be used to obtain new access tokens without re-authenticating. Run `notion-cli auth refresh` to refresh manually, or the CLI will attempt to refresh automatically when needed.
 
 ## Environment Variables
 

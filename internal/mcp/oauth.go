@@ -115,6 +115,9 @@ func RunOAuthFlow(ctx context.Context, tokenStore *FileTokenStore) error {
 		if err := handler.RegisterClient(ctx, "notion-cli"); err != nil {
 			return fmt.Errorf("register client: %w", err)
 		}
+		if err := tokenStore.SaveClientID(ctx, handler.GetClientID()); err != nil {
+			return fmt.Errorf("save client ID: %w", err)
+		}
 	}
 
 	authURL, err := handler.GetAuthorizationURL(ctx, state, codeChallenge)
@@ -195,6 +198,62 @@ func RunOAuthFlow(ctx context.Context, tokenStore *FileTokenStore) error {
 	case <-time.After(5 * time.Minute):
 		return errors.New("authentication timeout - no response received")
 	}
+}
+
+func RefreshToken(ctx context.Context, tokenStore *FileTokenStore) (*transport.Token, error) {
+	token, err := tokenStore.GetToken(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("get token: %w", err)
+	}
+
+	if token.RefreshToken == "" {
+		return nil, errors.New("no refresh token available")
+	}
+
+	clientID, err := tokenStore.GetClientID(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("get client ID: %w", err)
+	}
+	if clientID == "" {
+		return nil, errors.New("no client ID stored - run 'notion-cli auth login' first")
+	}
+
+	oauthConfig := transport.OAuthConfig{
+		ClientID:    clientID,
+		TokenStore:  tokenStore,
+		PKCEEnabled: true,
+	}
+
+	trans, err := transport.NewStreamableHTTP(
+		DefaultEndpoint,
+		transport.WithHTTPOAuth(oauthConfig),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create transport: %w", err)
+	}
+
+	mcpClient := client.NewClient(trans)
+	defer mcpClient.Close()
+
+	if err := mcpClient.Start(ctx); err != nil {
+		return nil, fmt.Errorf("start client: %w", err)
+	}
+
+	handler := trans.GetOAuthHandler()
+	if handler == nil {
+		return nil, errors.New("no OAuth handler available")
+	}
+
+	newToken, err := handler.RefreshToken(ctx, token.RefreshToken)
+	if err != nil {
+		return nil, fmt.Errorf("refresh token: %w", err)
+	}
+
+	if err := tokenStore.SaveToken(ctx, newToken); err != nil {
+		return nil, fmt.Errorf("save token: %w", err)
+	}
+
+	return newToken, nil
 }
 
 func openBrowser(url string) error {

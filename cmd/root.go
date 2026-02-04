@@ -8,7 +8,7 @@ type Context struct {
 type CLI struct {
         Token string `help:"Access token (skips OAuth)" env:"NOTION_ACCESS_TOKEN" hidden:""`
 
-        Config  ConfigCmd  `cmd:"" help:"Configure authentication"`
+        Auth    AuthCmd    `cmd:"" help:"Authentication commands"`
 	Page    PageCmd    `cmd:"" help:"Page commands"`
 	Search  SearchCmd  `cmd:"" help:"Search Notion"`
 	DB      DBCmd      `cmd:"" name:"db" help:"Database commands"`

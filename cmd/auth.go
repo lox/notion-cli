@@ -11,22 +11,16 @@ import (
 	"github.com/lox/notion-cli/internal/output"
 )
 
-type ConfigCmd struct {
-	Auth  ConfigAuthCmd  `cmd:"" default:"withargs" help:"Run OAuth flow to authenticate"`
-	Show  ConfigShowCmd  `cmd:"" help:"Show current configuration"`
-	Clear ConfigClearCmd `cmd:"" help:"Clear stored credentials"`
+type AuthCmd struct {
+	Login   AuthLoginCmd   `cmd:"" help:"Authenticate with Notion via OAuth"`
+	Refresh AuthRefreshCmd `cmd:"" help:"Refresh the access token"`
+	Status  AuthStatusCmd  `cmd:"" default:"withargs" help:"Show authentication status"`
+	Logout  AuthLogoutCmd  `cmd:"" help:"Clear stored credentials"`
 }
 
-type ConfigAuthCmd struct {
-	JSON bool `help:"Output as JSON" short:"j"`
-}
+type AuthLoginCmd struct{}
 
-func (c *ConfigAuthCmd) Run(ctx *Context) error {
-	ctx.JSON = c.JSON
-	return runConfigAuth(ctx)
-}
-
-func runConfigAuth(ctx *Context) error {
+func (c *AuthLoginCmd) Run(ctx *Context) error {
 	tokenStore, err := mcp.NewFileTokenStore()
 	if err != nil {
 		output.PrintError(err)
@@ -42,16 +36,49 @@ func runConfigAuth(ctx *Context) error {
 	return nil
 }
 
-type ConfigShowCmd struct {
+type AuthRefreshCmd struct{}
+
+func (c *AuthRefreshCmd) Run(ctx *Context) error {
+	tokenStore, err := mcp.NewFileTokenStore()
+	if err != nil {
+		output.PrintError(err)
+		return err
+	}
+
+	bgCtx := context.Background()
+	token, err := tokenStore.GetToken(bgCtx)
+	if err != nil {
+		if err == mcp.ErrNoToken {
+			output.PrintWarning("Not authenticated. Run 'notion-cli auth login' first.")
+			return err
+		}
+		output.PrintError(err)
+		return err
+	}
+
+	if token.RefreshToken == "" {
+		output.PrintWarning("No refresh token available. Run 'notion-cli auth login' to re-authenticate.")
+		return fmt.Errorf("no refresh token")
+	}
+
+	newToken, err := mcp.RefreshToken(bgCtx, tokenStore)
+	if err != nil {
+		output.PrintError(err)
+		return err
+	}
+
+	output.PrintSuccess("Token refreshed")
+	fmt.Printf("Expires: %s\n", newToken.ExpiresAt.Format("2 Jan 2006 15:04"))
+	return nil
+}
+
+type AuthStatusCmd struct {
 	JSON bool `help:"Output as JSON" short:"j"`
 }
 
-func (c *ConfigShowCmd) Run(ctx *Context) error {
+func (c *AuthStatusCmd) Run(ctx *Context) error {
 	ctx.JSON = c.JSON
-	return runConfigShow(ctx)
-}
 
-func runConfigShow(ctx *Context) error {
 	tokenStore, err := mcp.NewFileTokenStore()
 	if err != nil {
 		output.PrintError(err)
@@ -61,7 +88,7 @@ func runConfigShow(ctx *Context) error {
 	token, err := tokenStore.GetToken(context.Background())
 	if err != nil {
 		if err == mcp.ErrNoToken {
-			fmt.Println("Not configured. Run 'notion config auth' to authenticate.")
+			fmt.Println("Not authenticated. Run 'notion-cli auth login' to authenticate.")
 			return nil
 		}
 		output.PrintError(err)
@@ -105,13 +132,9 @@ func runConfigShow(ctx *Context) error {
 	return nil
 }
 
-type ConfigClearCmd struct{}
+type AuthLogoutCmd struct{}
 
-func (c *ConfigClearCmd) Run(ctx *Context) error {
-	return runConfigClear(ctx)
-}
-
-func runConfigClear(ctx *Context) error {
+func (c *AuthLogoutCmd) Run(ctx *Context) error {
 	tokenStore, err := mcp.NewFileTokenStore()
 	if err != nil {
 		output.PrintError(err)
@@ -123,6 +146,6 @@ func runConfigClear(ctx *Context) error {
 		return err
 	}
 
-	output.PrintSuccess("Credentials cleared")
+	output.PrintSuccess("Logged out")
 	return nil
 }
