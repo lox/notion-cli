@@ -125,6 +125,20 @@ This CLI connects to [Notion's remote MCP server](https://developers.notion.com/
 - **Semantic search** - Search across connected apps too
 - **Optimised for CLI** - Efficient responses
 
+## Using with AI Agents
+
+The CLI includes a **skill** that helps AI agents effectively use notion-cli.
+
+### Installation
+
+Install the skill using [skills.sh](https://skills.sh):
+
+```bash
+npx skills add lox/notion-cli
+```
+
+View the skill documentation in the [`skills/notion-cli/`](skills/notion-cli/) directory.
+
 ## Links
 
 - [Notion MCP Documentation](https://developers.notion.com/guides/mcp/mcp)
