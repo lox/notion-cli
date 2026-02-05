@@ -111,9 +111,9 @@ func (t *Table) printRow(row []string, widths []int, style *color.Color) {
 
 	line := strings.Join(parts, "  ")
 	if style != nil {
-		style.Fprintln(t.out, line)
+		_, _ = style.Fprintln(t.out, line)
 	} else {
-		fmt.Fprintln(t.out, line)
+		_, _ = fmt.Fprintln(t.out, line)
 	}
 }
 
@@ -124,9 +124,9 @@ func (t *Table) printSeparator(widths []int, style *color.Color) {
 	}
 	line := strings.Join(parts, "──")
 	if style != nil {
-		style.Fprintln(t.out, line)
+		_, _ = style.Fprintln(t.out, line)
 	} else {
-		fmt.Fprintln(t.out, line)
+		_, _ = fmt.Fprintln(t.out, line)
 	}
 }
 

@@ -37,7 +37,7 @@ func runPageList(ctx *Context, query string, limit int) error {
 	if err != nil {
 		return err
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	bgCtx := context.Background()
 
@@ -90,7 +90,7 @@ func runPageView(ctx *Context, url string, raw bool) error {
 	if err != nil {
 		return err
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	bgCtx := context.Background()
 	result, err := client.Fetch(bgCtx, url)
@@ -129,7 +129,7 @@ func runPageCreate(ctx *Context, title, parent, content string) error {
 	if err != nil {
 		return err
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	bgCtx := context.Background()
 	req := mcp.CreatePageRequest{
@@ -198,7 +198,7 @@ func runPageUpload(ctx *Context, file, title, parent, icon string) error {
 	if err != nil {
 		return err
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	parentID := parent
 	if parent != "" && !looksLikeID(parent) {
@@ -330,7 +330,7 @@ func runPageEdit(ctx *Context, page, replace, find, replaceWith, appendText stri
 	if err != nil {
 		return err
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	bgCtx := context.Background()
 

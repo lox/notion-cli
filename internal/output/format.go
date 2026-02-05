@@ -41,31 +41,31 @@ func PrintPage(page Page, asJSON bool) error {
 	labelStyle := color.New(color.Faint)
 
 	if page.Icon != "" {
-		titleStyle.Printf("%s ", page.Icon)
+		_, _ = titleStyle.Printf("%s ", page.Icon)
 	}
-	titleStyle.Println(page.Title)
+	_, _ = titleStyle.Println(page.Title)
 	fmt.Println()
 
-	labelStyle.Print("ID:           ")
+	_, _ = labelStyle.Print("ID:           ")
 	fmt.Println(page.ID)
 
-	labelStyle.Print("URL:          ")
+	_, _ = labelStyle.Print("URL:          ")
 	fmt.Println(page.URL)
 
-	labelStyle.Print("Created:      ")
+	_, _ = labelStyle.Print("Created:      ")
 	fmt.Println(page.CreatedTime.Format(time.RFC3339))
 
-	labelStyle.Print("Last edited:  ")
+	_, _ = labelStyle.Print("Last edited:  ")
 	fmt.Println(page.LastEditedTime.Format(time.RFC3339))
 
 	if page.Archived {
-		labelStyle.Print("Status:       ")
-		color.New(color.FgYellow).Println("Archived")
+		_, _ = labelStyle.Print("Status:       ")
+		_, _ = color.New(color.FgYellow).Println("Archived")
 	}
 
 	if page.Content != "" {
 		fmt.Println()
-		labelStyle.Println("─── Content ───")
+		_, _ = labelStyle.Println("─── Content ───")
 		fmt.Println()
 
 		if err := RenderMarkdown(page.Content); err != nil {
@@ -141,9 +141,9 @@ func PrintComments(comments []Comment, asJSON bool) error {
 			fmt.Println()
 		}
 
-		authorStyle.Print(c.CreatedBy)
+		_, _ = authorStyle.Print(c.CreatedBy)
 		fmt.Print(" ")
-		timeStyle.Println(formatTime(c.CreatedTime))
+		_, _ = timeStyle.Println(formatTime(c.CreatedTime))
 		fmt.Println(c.Content)
 	}
 
@@ -152,25 +152,25 @@ func PrintComments(comments []Comment, asJSON bool) error {
 
 func PrintError(err error) {
 	errStyle := color.New(color.FgRed, color.Bold)
-	errStyle.Fprint(os.Stderr, "Error: ")
-	fmt.Fprintln(os.Stderr, err.Error())
+	_, _ = errStyle.Fprint(os.Stderr, "Error: ")
+	_, _ = fmt.Fprintln(os.Stderr, err.Error())
 }
 
 func PrintSuccess(message string) {
 	successStyle := color.New(color.FgGreen)
-	successStyle.Print("✓ ")
+	_, _ = successStyle.Print("✓ ")
 	fmt.Println(message)
 }
 
 func PrintWarning(message string) {
 	warnStyle := color.New(color.FgYellow)
-	warnStyle.Print("⚠ ")
+	_, _ = warnStyle.Print("⚠ ")
 	fmt.Println(message)
 }
 
 func PrintInfo(message string) {
 	infoStyle := color.New(color.Faint)
-	infoStyle.Println(message)
+	_, _ = infoStyle.Println(message)
 }
 
 type UserError struct {

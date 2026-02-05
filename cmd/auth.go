@@ -118,14 +118,14 @@ func (c *AuthStatusCmd) Run(ctx *Context) error {
 	}
 	fmt.Println()
 
-	labelStyle.Print("Config path: ")
+	_, _ = labelStyle.Print("Config path: ")
 	fmt.Println(tokenStore.Path())
 
-	labelStyle.Print("Token type:  ")
+	_, _ = labelStyle.Print("Token type:  ")
 	fmt.Println(token.TokenType)
 
 	if !token.ExpiresAt.IsZero() {
-		labelStyle.Print("Expires:     ")
+		_, _ = labelStyle.Print("Expires:     ")
 		fmt.Println(token.ExpiresAt.Format("2 Jan 2006 15:04"))
 	}
 

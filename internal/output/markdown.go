@@ -274,13 +274,13 @@ func renderPageHeader(meta *pageMetadata, isTTY bool) {
 
 		fmt.Println()
 		if meta.Title != "" {
-			titleStyle.Println(meta.Title)
+			_, _ = titleStyle.Println(meta.Title)
 		}
 		if meta.URL != "" {
-			urlStyle.Println(meta.URL)
+			_, _ = urlStyle.Println(meta.URL)
 		}
 		if meta.Type != "" {
-			labelStyle.Printf("Type: ")
+			_, _ = labelStyle.Printf("Type: ")
 			fmt.Println(meta.Type)
 		}
 		fmt.Println()

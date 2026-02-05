@@ -56,7 +56,7 @@ func RunOAuthFlow(ctx context.Context, tokenStore *FileTokenStore) error {
 	if err != nil {
 		return fmt.Errorf("start callback server: %w", err)
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 
 	port := listener.Addr().(*net.TCPAddr).Port
 	redirectURI := fmt.Sprintf("http://localhost:%d%s", port, callbackPath)
@@ -76,7 +76,7 @@ func RunOAuthFlow(ctx context.Context, tokenStore *FileTokenStore) error {
 	}
 
 	mcpClient := client.NewClient(trans)
-	defer mcpClient.Close()
+	defer func() { _ = mcpClient.Close() }()
 
 	if err := mcpClient.Start(ctx); err != nil {
 		return fmt.Errorf("start client: %w", err)
@@ -142,9 +142,9 @@ func RunOAuthFlow(ctx context.Context, tokenStore *FileTokenStore) error {
 
 			w.Header().Set("Content-Type", "text/html")
 			if result.Error != "" {
-				fmt.Fprintf(w, "<h1>Authentication failed</h1><p>%s</p>", result.Error)
+				_, _ = fmt.Fprintf(w, "<h1>Authentication failed</h1><p>%s</p>", result.Error)
 			} else {
-				fmt.Fprint(w, `<!DOCTYPE html>
+				_, _ = fmt.Fprint(w, `<!DOCTYPE html>
 <html><body>
 <h1>Authentication successful!</h1>
 <p>You can close this window and return to the terminal.</p>
@@ -159,7 +159,7 @@ func RunOAuthFlow(ctx context.Context, tokenStore *FileTokenStore) error {
 	go func() {
 		_ = server.Serve(listener)
 	}()
-	defer server.Shutdown(context.Background())
+	defer func() { _ = server.Shutdown(context.Background()) }()
 
 	fmt.Println()
 	fmt.Println("To authenticate, open this URL in your browser:")
@@ -233,7 +233,7 @@ func RefreshToken(ctx context.Context, tokenStore *FileTokenStore) (*transport.T
 	}
 
 	mcpClient := client.NewClient(trans)
-	defer mcpClient.Close()
+	defer func() { _ = mcpClient.Close() }()
 
 	if err := mcpClient.Start(ctx); err != nil {
 		return nil, fmt.Errorf("start client: %w", err)

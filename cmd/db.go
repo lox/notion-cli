@@ -29,7 +29,7 @@ func runDBList(ctx *Context, query string, limit int) error {
 	if err != nil {
 		return err
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	bgCtx := context.Background()
 
@@ -81,7 +81,7 @@ func runDBQuery(ctx *Context, id string) error {
 	if err != nil {
 		return err
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	bgCtx := context.Background()
 	result, err := client.Fetch(bgCtx, id)

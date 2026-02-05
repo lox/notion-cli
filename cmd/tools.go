@@ -15,7 +15,7 @@ func (c *ToolsCmd) Run(ctx *Context) error {
 	if err != nil {
 		return err
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	bgCtx := context.Background()
 	tools, err := client.ListTools(bgCtx)
