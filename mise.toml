@@ -10,10 +10,10 @@ go build -ldflags "-X main.version=$VERSION" -o notion-cli .
 """
 
 [tasks.install]
-description = "Install to $GOPATH/bin"
+description = "Build and install to ~/bin"
 run = """
 VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
-go install -ldflags "-X main.version=$VERSION" .
+go build -ldflags "-X main.version=$VERSION" -o ~/bin/notion-cli .
 """
 
 [tasks.test]
