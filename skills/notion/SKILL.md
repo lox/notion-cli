@@ -1,5 +1,5 @@
 ---
-name: notion-cli
+name: notion
 description: Manage Notion pages, databases, and comments from the command line. Search, view, create, and edit content in your Notion workspace.
 allowed-tools: Bash(notion:*), Bash(notion-cli:*)
 ---
