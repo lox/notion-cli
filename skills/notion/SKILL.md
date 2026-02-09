@@ -59,6 +59,8 @@ notion-cli search "query" --json            # JSON output
 
 ### Pages
 
+All page commands accept a **URL**, **name**, or **ID** to identify pages.
+
 ```bash
 # List pages
 notion-cli page list
@@ -66,14 +68,17 @@ notion-cli page list --limit 10
 notion-cli page list --json
 
 # View a page (renders as markdown in terminal)
-notion-cli page view <url-or-id>
-notion-cli page view <url> --raw            # Show raw Notion markup
-notion-cli page view <url> --json           # JSON output
+notion-cli page view <page>
+notion-cli page view <page> --raw            # Show raw Notion markup
+notion-cli page view <page> --json           # JSON output
+notion-cli page view "Meeting Notes"         # By name
+notion-cli page view https://notion.so/...   # By URL
 
 # Create a page
 notion-cli page create --title "New Page"
 notion-cli page create --title "Doc" --content "# Heading\n\nContent here"
-notion-cli page create --title "Child" --parent <parent-page-id>
+notion-cli page create --title "Child" --parent "Engineering"   # Parent by name
+notion-cli page create --title "Child" --parent <page-id>       # Parent by ID
 
 # Upload a markdown file as a page
 notion-cli page upload ./document.md
@@ -81,9 +86,9 @@ notion-cli page upload ./doc.md --title "Custom Title"
 notion-cli page upload ./doc.md --parent "Parent Page Name"
 
 # Edit a page
-notion-cli page edit <url> --replace "New content"
-notion-cli page edit <url> --find "old text" --replace-with "new text"
-notion-cli page edit <url> --find "section" --append "additional content"
+notion-cli page edit <page> --replace "New content"
+notion-cli page edit <page> --find "old text" --replace-with "new text"
+notion-cli page edit <page> --find "section" --append "additional content"
 ```
 
 ### Databases
