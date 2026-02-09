@@ -29,11 +29,15 @@ var hexPattern = regexp.MustCompile(`[0-9a-fA-F]{32}`)
 
 // ParsePageRef classifies an input string as a URL, ID, or name.
 func ParsePageRef(s string) PageRef {
-	if id, ok := extractNotionUUID(s); ok {
-		return PageRef{Kind: RefID, Raw: s, ID: id}
-	}
 	if strings.HasPrefix(s, "http://") || strings.HasPrefix(s, "https://") {
+		if id, ok := extractNotionUUID(s); ok {
+			return PageRef{Kind: RefID, Raw: s, ID: id}
+		}
 		return PageRef{Kind: RefURL, Raw: s}
+	}
+	if LooksLikeID(s) {
+		id, _ := extractNotionUUID(s)
+		return PageRef{Kind: RefID, Raw: s, ID: id}
 	}
 	return PageRef{Kind: RefName, Raw: s}
 }
@@ -75,7 +79,7 @@ func extractNotionUUID(s string) (string, bool) {
 
 func isAllHex(s string) bool {
 	for _, r := range s {
-		if !((r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F')) {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'f') && (r < 'A' || r > 'F') {
 			return false
 		}
 	}

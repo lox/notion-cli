@@ -317,14 +317,15 @@ func runPageEdit(ctx *Context, page, replace, find, replaceWith, appendText stri
 
 	ref := cli.ParsePageRef(page)
 	pageID := page
-	if ref.Kind == cli.RefName {
+	switch ref.Kind {
+	case cli.RefName:
 		resolved, err := cli.ResolvePageID(bgCtx, client, page)
 		if err != nil {
 			output.PrintError(err)
 			return err
 		}
 		pageID = resolved
-	} else if ref.Kind == cli.RefID {
+	case cli.RefID:
 		pageID = ref.ID
 	}
 
