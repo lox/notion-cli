@@ -63,11 +63,23 @@ notion-cli page list --limit 50                # Limit results
 notion-cli page list --json                    # Output as JSON
 
 notion-cli page view <url>                     # View page content
+notion-cli page view <url> --raw               # View raw Notion markup
 notion-cli page view <url> --json              # Output as JSON
 
 notion-cli page create --title "Title"         # Create a page
 notion-cli page create --title "T" --content "Body text"
 notion-cli page create --title "T" --parent <page-id>
+
+# Upload a markdown file as a new page
+notion-cli page upload ./document.md                        # Title from # heading or filename
+notion-cli page upload ./document.md --title "Custom Title" # Explicit title
+notion-cli page upload ./document.md --parent "Engineering" # Parent by name or ID
+notion-cli page upload ./document.md --icon "📄"             # Set emoji icon
+
+# Edit an existing page
+notion-cli page edit <url> --replace "New content"                      # Replace all content
+notion-cli page edit <url> --find "old text" --replace-with "new text"  # Find and replace
+notion-cli page edit <url> --find "section" --append "extra content"    # Append after match
 ```
 
 ### Search
