@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"unicode"
 
 	"github.com/lox/notion-cli/internal/cli"
 	"github.com/lox/notion-cli/internal/mcp"
@@ -75,17 +74,17 @@ func filterPages(results []mcp.SearchResult, limit int) []output.Page {
 }
 
 type PageViewCmd struct {
-	URL  string `arg:"" help:"Page URL or ID"`
+	Page string `arg:"" help:"Page URL, name, or ID"`
 	JSON bool   `help:"Output as JSON" short:"j"`
 	Raw  bool   `help:"Output raw Notion response without formatting" short:"r"`
 }
 
 func (c *PageViewCmd) Run(ctx *Context) error {
 	ctx.JSON = c.JSON
-	return runPageView(ctx, c.URL, c.Raw)
+	return runPageView(ctx, c.Page, c.Raw)
 }
 
-func runPageView(ctx *Context, url string, raw bool) error {
+func runPageView(ctx *Context, page string, raw bool) error {
 	client, err := cli.RequireClient()
 	if err != nil {
 		return err
@@ -93,7 +92,19 @@ func runPageView(ctx *Context, url string, raw bool) error {
 	defer func() { _ = client.Close() }()
 
 	bgCtx := context.Background()
-	result, err := client.Fetch(bgCtx, url)
+
+	ref := cli.ParsePageRef(page)
+	fetchID := page
+	if ref.Kind == cli.RefName {
+		resolved, err := cli.ResolvePageID(bgCtx, client, page)
+		if err != nil {
+			output.PrintError(err)
+			return err
+		}
+		fetchID = resolved
+	}
+
+	result, err := client.Fetch(bgCtx, fetchID)
 	if err != nil {
 		output.PrintError(err)
 		return err
@@ -114,7 +125,7 @@ func runPageView(ctx *Context, url string, raw bool) error {
 
 type PageCreateCmd struct {
 	Title   string `help:"Page title" short:"t" required:""`
-	Parent  string `help:"Parent page ID" short:"p"`
+	Parent  string `help:"Parent page URL, name, or ID" short:"p"`
 	Content string `help:"Page content (markdown)" short:"c"`
 	JSON    bool   `help:"Output as JSON" short:"j"`
 }
@@ -132,9 +143,20 @@ func runPageCreate(ctx *Context, title, parent, content string) error {
 	defer func() { _ = client.Close() }()
 
 	bgCtx := context.Background()
+
+	parentID := parent
+	if parent != "" {
+		resolved, err := cli.ResolvePageID(bgCtx, client, parent)
+		if err != nil {
+			output.PrintError(err)
+			return err
+		}
+		parentID = resolved
+	}
+
 	req := mcp.CreatePageRequest{
 		Title:        title,
-		ParentPageID: parent,
+		ParentPageID: parentID,
 		Content:      content,
 	}
 
@@ -164,7 +186,7 @@ func runPageCreate(ctx *Context, title, parent, content string) error {
 type PageUploadCmd struct {
 	File   string `arg:"" help:"Markdown file to upload" type:"existingfile"`
 	Title  string `help:"Page title (default: filename or first heading)" short:"t"`
-	Parent string `help:"Parent page name or ID" short:"p"`
+	Parent string `help:"Parent page URL, name, or ID" short:"p"`
 	Icon   string `help:"Emoji icon for the page" short:"i"`
 	JSON   bool   `help:"Output as JSON" short:"j"`
 }
@@ -200,9 +222,11 @@ func runPageUpload(ctx *Context, file, title, parent, icon string) error {
 	}
 	defer func() { _ = client.Close() }()
 
+	bgCtx := context.Background()
+
 	parentID := parent
-	if parent != "" && !looksLikeID(parent) {
-		resolved, err := resolvePageByName(client, parent)
+	if parent != "" {
+		resolved, err := cli.ResolvePageID(bgCtx, client, parent)
 		if err != nil {
 			output.PrintError(err)
 			return err
@@ -210,7 +234,6 @@ func runPageUpload(ctx *Context, file, title, parent, icon string) error {
 		parentID = resolved
 	}
 
-	bgCtx := context.Background()
 	req := mcp.CreatePageRequest{
 		Title:        title,
 		ParentPageID: parentID,
@@ -263,7 +286,7 @@ func extractEmojiFromTitle(title string) (icon, cleanTitle string) {
 	}
 
 	first := runes[0]
-	if isEmoji(first) {
+	if cli.IsEmoji(first) {
 		rest := strings.TrimSpace(string(runes[1:]))
 		return string(first), rest
 	}
@@ -271,50 +294,8 @@ func extractEmojiFromTitle(title string) (icon, cleanTitle string) {
 	return "", title
 }
 
-func isEmoji(r rune) bool {
-	return !unicode.IsLetter(r) && !unicode.IsDigit(r) && !unicode.IsSpace(r) && !unicode.IsPunct(r) && r > 127
-}
-
-func looksLikeID(s string) bool {
-	if len(s) == 32 || len(s) == 36 {
-		for _, c := range s {
-			if !unicode.IsDigit(c) && (c < 'a' || c > 'f') && c != '-' {
-				return false
-			}
-		}
-		return true
-	}
-	return false
-}
-
-func resolvePageByName(client *mcp.Client, name string) (string, error) {
-	bgCtx := context.Background()
-	resp, err := client.Search(bgCtx, name)
-	if err != nil {
-		return "", err
-	}
-
-	for _, r := range resp.Results {
-		if r.ObjectType == "page" || r.Object == "page" {
-			if strings.EqualFold(r.Title, name) {
-				return r.ID, nil
-			}
-		}
-	}
-
-	for _, r := range resp.Results {
-		if r.ObjectType == "page" || r.Object == "page" {
-			if strings.Contains(strings.ToLower(r.Title), strings.ToLower(name)) {
-				return r.ID, nil
-			}
-		}
-	}
-
-	return "", &output.UserError{Message: "page not found: " + name}
-}
-
 type PageEditCmd struct {
-	Page      string `arg:"" help:"Page URL or ID"`
+	Page      string `arg:"" help:"Page URL, name, or ID"`
 	Replace   string `help:"Replace entire content with this text" xor:"action"`
 	Find      string `help:"Text to find (use ... for ellipsis)" xor:"action"`
 	ReplaceWith string `help:"Text to replace with (requires --find)" name:"replace-with"`
@@ -334,8 +315,21 @@ func runPageEdit(ctx *Context, page, replace, find, replaceWith, appendText stri
 
 	bgCtx := context.Background()
 
+	ref := cli.ParsePageRef(page)
+	pageID := page
+	if ref.Kind == cli.RefName {
+		resolved, err := cli.ResolvePageID(bgCtx, client, page)
+		if err != nil {
+			output.PrintError(err)
+			return err
+		}
+		pageID = resolved
+	} else if ref.Kind == cli.RefID {
+		pageID = ref.ID
+	}
+
 	var req mcp.UpdatePageRequest
-	req.PageID = page
+	req.PageID = pageID
 
 	switch {
 	case replace != "":
