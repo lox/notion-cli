@@ -1,6 +1,7 @@
 [tools]
 go = "1.25"
 golangci-lint = "2"
+svu = "3"
 
 [tasks.build]
 description = "Build the binary"
@@ -41,4 +42,20 @@ run = """
 mkdir -p ~/.config/agents/skills/notion
 cp skills/notion/SKILL.md ~/.config/agents/skills/notion/SKILL.md
 echo "Installed skill to ~/.config/agents/skills/notion/"
+"""
+
+[tasks.release]
+description = "Tag the next version and push to trigger a release"
+depends = ["check"]
+run = """
+NEXT=$(svu next)
+CURRENT=$(svu current)
+if [ "$NEXT" = "$CURRENT" ]; then
+  echo "No version bump detected (current: $CURRENT). Use conventional commits (feat:, fix:, etc.)."
+  exit 1
+fi
+echo "Releasing $CURRENT -> $NEXT"
+git tag "$NEXT"
+git push origin "$NEXT"
+echo "Tagged and pushed $NEXT — release workflow will run on GitHub."
 """
