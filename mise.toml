@@ -34,3 +34,11 @@ rm -rf dist/
 [tasks.check]
 description = "Run all checks (build, test, lint)"
 depends = ["build", "test", "lint"]
+
+[tasks.install-skill]
+description = "Install the Amp skill globally"
+run = """
+mkdir -p ~/.config/agents/skills/notion
+cp skills/notion/SKILL.md ~/.config/agents/skills/notion/SKILL.md
+echo "Installed skill to ~/.config/agents/skills/notion/"
+"""
