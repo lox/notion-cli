@@ -76,6 +76,11 @@ notion-cli page upload ./document.md --title "Custom Title" # Explicit title
 notion-cli page upload ./document.md --parent "Engineering" # Parent by name or ID
 notion-cli page upload ./document.md --icon "📄"             # Set emoji icon
 
+# Sync a markdown file (create or update)
+notion-cli page sync ./document.md                          # Creates page, writes notion-id to frontmatter
+notion-cli page sync ./document.md                          # Updates page using notion-id from frontmatter
+notion-cli page sync ./document.md --parent "Engineering"   # Set parent on first sync
+
 # Edit an existing page
 notion-cli page edit <url> --replace "New content"                      # Replace all content
 notion-cli page edit <url> --find "old text" --replace-with "new text"  # Find and replace

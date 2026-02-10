@@ -85,6 +85,13 @@ notion-cli page upload ./document.md
 notion-cli page upload ./doc.md --title "Custom Title"
 notion-cli page upload ./doc.md --parent "Parent Page Name"
 
+# Sync a markdown file (create or update)
+# First run creates the page and writes notion-id to the file's frontmatter.
+# Subsequent runs update the page content using the stored notion-id.
+notion-cli page sync ./document.md
+notion-cli page sync ./document.md --parent "Engineering"   # Set parent on first sync
+notion-cli page sync ./document.md --title "Custom Title"
+
 # Edit a page
 notion-cli page edit <page> --replace "New content"
 notion-cli page edit <page> --find "old text" --replace-with "new text"

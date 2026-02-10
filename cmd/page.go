@@ -17,6 +17,7 @@ type PageCmd struct {
 	View   PageViewCmd   `cmd:"" help:"View a page"`
 	Create PageCreateCmd `cmd:"" help:"Create a page"`
 	Upload PageUploadCmd `cmd:"" help:"Upload a markdown file as a page"`
+	Sync   PageSyncCmd   `cmd:"" help:"Sync a markdown file to a page (create or update)"`
 	Edit   PageEditCmd   `cmd:"" help:"Edit a page"`
 }
 
@@ -354,5 +355,130 @@ func runPageEdit(ctx *Context, page, replace, find, replaceWith, appendText stri
 	}
 
 	output.PrintSuccess("Page updated")
+	return nil
+}
+
+type PageSyncCmd struct {
+	File   string `arg:"" help:"Markdown file to sync" type:"existingfile"`
+	Title  string `help:"Page title (default: filename or first heading)" short:"t"`
+	Parent string `help:"Parent page URL, name, or ID" short:"p"`
+	Icon   string `help:"Emoji icon for the page" short:"i"`
+	JSON   bool   `help:"Output as JSON" short:"j"`
+}
+
+func (c *PageSyncCmd) Run(ctx *Context) error {
+	ctx.JSON = c.JSON
+	return runPageSync(ctx, c.File, c.Title, c.Parent, c.Icon)
+}
+
+func runPageSync(ctx *Context, file, title, parent, icon string) error {
+	raw, err := os.ReadFile(file)
+	if err != nil {
+		output.PrintError(err)
+		return err
+	}
+
+	content := string(raw)
+	fm, body := cli.ParseFrontmatter(content)
+
+	if title == "" {
+		title = extractTitleFromMarkdown(body)
+	}
+	if title == "" {
+		title = strings.TrimSuffix(filepath.Base(file), filepath.Ext(file))
+	}
+	if icon == "" {
+		icon, title = extractEmojiFromTitle(title)
+	}
+
+	client, err := cli.RequireClient()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = client.Close() }()
+
+	bgCtx := context.Background()
+
+	if fm.NotionID != "" {
+		req := mcp.UpdatePageRequest{
+			PageID:     fm.NotionID,
+			Command:    "replace_content",
+			NewContent: body,
+		}
+		if err := client.UpdatePage(bgCtx, req); err != nil {
+			output.PrintError(err)
+			return err
+		}
+
+		displayTitle := title
+		if icon != "" {
+			displayTitle = icon + " " + title
+		}
+
+		if ctx.JSON {
+			outPage := output.Page{
+				ID:    fm.NotionID,
+				Title: displayTitle,
+				Icon:  icon,
+			}
+			return output.PrintPage(outPage, true)
+		}
+
+		output.PrintSuccess("Synced: " + displayTitle)
+		return nil
+	}
+
+	parentID := parent
+	if parent != "" {
+		resolved, err := cli.ResolvePageID(bgCtx, client, parent)
+		if err != nil {
+			output.PrintError(err)
+			return err
+		}
+		parentID = resolved
+	}
+
+	req := mcp.CreatePageRequest{
+		Title:        title,
+		ParentPageID: parentID,
+		Content:      body,
+	}
+
+	resp, err := client.CreatePage(bgCtx, req)
+	if err != nil {
+		output.PrintError(err)
+		return err
+	}
+
+	pageID := resp.ID
+	if pageID == "" {
+		output.PrintWarning("Page created but could not retrieve ID for frontmatter")
+	} else {
+		updated := cli.SetFrontmatterID(content, pageID)
+		if err := os.WriteFile(file, []byte(updated), 0o644); err != nil {
+			output.PrintError(fmt.Errorf("page created but failed to update frontmatter: %w", err))
+			return err
+		}
+	}
+
+	displayTitle := title
+	if icon != "" {
+		displayTitle = icon + " " + title
+	}
+
+	if ctx.JSON {
+		outPage := output.Page{
+			ID:    pageID,
+			URL:   resp.URL,
+			Title: displayTitle,
+			Icon:  icon,
+		}
+		return output.PrintPage(outPage, true)
+	}
+
+	output.PrintSuccess("Created: " + displayTitle)
+	if resp.URL != "" {
+		output.PrintInfo(resp.URL)
+	}
 	return nil
 }
