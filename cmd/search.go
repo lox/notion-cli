@@ -9,24 +9,31 @@ import (
 )
 
 type SearchCmd struct {
-	Query string `arg:"" help:"Search query"`
-	Limit int    `help:"Maximum number of results" short:"l" default:"20"`
-	JSON  bool   `help:"Output as JSON" short:"j"`
+	Query      string `arg:"" help:"Search query"`
+	Limit      int    `help:"Maximum number of results" short:"l" default:"20"`
+	JSON       bool   `help:"Output as JSON" short:"j"`
+	SearchMode string `help:"Search mode: 'workspace' (default) or 'ai' (includes connected sources like Linear, Slack)" short:"m" default:"workspace" enum:"workspace,ai"`
 }
 
 func (c *SearchCmd) Run(ctx *Context) error {
 	ctx.JSON = c.JSON
-	return runSearch(ctx, c.Query, c.Limit)
+	return runSearch(ctx, c.Query, c.Limit, c.SearchMode)
 }
 
-func runSearch(ctx *Context, query string, limit int) error {
+func runSearch(ctx *Context, query string, limit int, searchMode string) error {
 	client, err := cli.RequireClient()
 	if err != nil {
 		return err
 	}
 
+	mode := "workspace_search"
+	if searchMode == "ai" {
+		mode = "ai_search"
+	}
+	opts := &mcp.SearchOptions{ContentSearchMode: mode}
+
 	bgCtx := context.Background()
-	resp, err := client.Search(bgCtx, query)
+	resp, err := client.Search(bgCtx, query, opts)
 	if err != nil {
 		output.PrintError(err)
 		return err
