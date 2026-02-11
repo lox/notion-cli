@@ -161,10 +161,18 @@ func (c *Client) ListTools(ctx context.Context) ([]mcp.Tool, error) {
 	return resp.Tools, nil
 }
 
-func (c *Client) Search(ctx context.Context, query string) (*SearchResponse, error) {
-	result, err := c.CallTool(ctx, "notion-search", map[string]any{
+type SearchOptions struct {
+	ContentSearchMode string // "workspace_search" or "ai_search" or "" (auto)
+}
+
+func (c *Client) Search(ctx context.Context, query string, opts *SearchOptions) (*SearchResponse, error) {
+	args := map[string]any{
 		"query": query,
-	})
+	}
+	if opts != nil && opts.ContentSearchMode != "" {
+		args["content_search_mode"] = opts.ContentSearchMode
+	}
+	result, err := c.CallTool(ctx, "notion-search", args)
 	if err != nil {
 		return nil, err
 	}

@@ -102,7 +102,7 @@ func LooksLikeID(s string) bool {
 }
 
 func resolvePageByName(ctx context.Context, client *mcp.Client, name string) (string, error) {
-	resp, err := client.Search(ctx, name)
+	resp, err := client.Search(ctx, name, &mcp.SearchOptions{ContentSearchMode: "workspace_search"})
 	if err != nil {
 		return "", err
 	}
