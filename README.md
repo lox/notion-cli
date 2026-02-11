@@ -167,7 +167,7 @@ claude plugin marketplace add lox/notion-cli
 claude plugin install notion-cli@notion-cli
 ```
 
-View the skill at: [skills/notion-cli/SKILL.md](skills/notion-cli/SKILL.md)
+View the skill at: [skills/notion/SKILL.md](skills/notion/SKILL.md)
 
 ## Links
 
