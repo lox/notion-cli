@@ -30,13 +30,13 @@ var hexPattern = regexp.MustCompile(`[0-9a-fA-F]{32}`)
 // ParsePageRef classifies an input string as a URL, ID, or name.
 func ParsePageRef(s string) PageRef {
 	if strings.HasPrefix(s, "http://") || strings.HasPrefix(s, "https://") {
-		if id, ok := extractNotionUUID(s); ok {
+		if id, ok := ExtractNotionUUID(s); ok {
 			return PageRef{Kind: RefID, Raw: s, ID: id}
 		}
 		return PageRef{Kind: RefURL, Raw: s}
 	}
 	if LooksLikeID(s) {
-		id, _ := extractNotionUUID(s)
+		id, _ := ExtractNotionUUID(s)
 		return PageRef{Kind: RefID, Raw: s, ID: id}
 	}
 	return PageRef{Kind: RefName, Raw: s}
@@ -51,7 +51,7 @@ func ResolvePageID(ctx context.Context, client *mcp.Client, input string) (strin
 	case RefID:
 		return ref.ID, nil
 	case RefURL:
-		if id, ok := extractNotionUUID(input); ok {
+		if id, ok := ExtractNotionUUID(input); ok {
 			return id, nil
 		}
 		return "", &output.UserError{Message: fmt.Sprintf("could not extract page ID from URL: %s\nUse the page ID directly instead.", input)}
@@ -61,9 +61,9 @@ func ResolvePageID(ctx context.Context, client *mcp.Client, input string) (strin
 	return "", &output.UserError{Message: "invalid page reference: " + input}
 }
 
-// extractNotionUUID finds exactly 32 hex digits in a string and returns
+// ExtractNotionUUID finds exactly 32 hex digits in a string and returns
 // the canonical UUID format (8-4-4-4-12).
-func extractNotionUUID(s string) (string, bool) {
+func ExtractNotionUUID(s string) (string, bool) {
 	cleaned := strings.ReplaceAll(s, "-", "")
 
 	if len(cleaned) == 32 && isAllHex(cleaned) {
@@ -93,7 +93,7 @@ func formatUUID(hex string) string {
 
 // LooksLikeID returns true if the string is a valid Notion UUID (32 or 36 hex chars).
 func LooksLikeID(s string) bool {
-	_, ok := extractNotionUUID(s)
+	_, ok := ExtractNotionUUID(s)
 	if !ok {
 		return false
 	}

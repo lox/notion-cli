@@ -81,12 +81,12 @@ func TestExtractNotionUUID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
-			id, ok := extractNotionUUID(tt.input)
+			id, ok := ExtractNotionUUID(tt.input)
 			if ok != tt.wantOK {
-				t.Errorf("extractNotionUUID(%q) ok = %v, want %v", tt.input, ok, tt.wantOK)
+				t.Errorf("ExtractNotionUUID(%q) ok = %v, want %v", tt.input, ok, tt.wantOK)
 			}
 			if id != tt.wantID {
-				t.Errorf("extractNotionUUID(%q) = %q, want %q", tt.input, id, tt.wantID)
+				t.Errorf("ExtractNotionUUID(%q) = %q, want %q", tt.input, id, tt.wantID)
 			}
 		})
 	}

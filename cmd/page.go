@@ -451,6 +451,9 @@ func runPageSync(ctx *Context, file, title, parent, icon string) error {
 	}
 
 	pageID := resp.ID
+	if pageID == "" && resp.URL != "" {
+		pageID, _ = cli.ExtractNotionUUID(resp.URL)
+	}
 	if pageID == "" {
 		output.PrintWarning("Page created but could not retrieve ID for frontmatter")
 	} else {
