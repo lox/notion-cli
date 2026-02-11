@@ -13,7 +13,7 @@ type Frontmatter struct {
 // ParseFrontmatter extracts frontmatter and body from a markdown string.
 // Returns the parsed frontmatter (if any) and the body without frontmatter.
 func ParseFrontmatter(content string) (Frontmatter, string) {
-	trimmed := strings.TrimSpace(content)
+	trimmed := strings.TrimLeft(content, " \t")
 	if !strings.HasPrefix(trimmed, frontmatterDelimiter) {
 		return Frontmatter{}, content
 	}
@@ -42,11 +42,14 @@ func ParseFrontmatter(content string) (Frontmatter, string) {
 
 	fm := Frontmatter{}
 	for _, line := range strings.Split(fmBlock, "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") {
+		trimLine := strings.TrimRight(line, " \t\r")
+		if trimLine == "" || strings.HasPrefix(trimLine, "#") {
 			continue
 		}
-		k, v, ok := strings.Cut(line, ":")
+		if strings.HasPrefix(trimLine, " ") || strings.HasPrefix(trimLine, "\t") {
+			continue
+		}
+		k, v, ok := strings.Cut(trimLine, ":")
 		if !ok {
 			continue
 		}
@@ -64,33 +67,48 @@ func ParseFrontmatter(content string) (Frontmatter, string) {
 // If frontmatter already exists, it updates or adds the notion-id field.
 // If no frontmatter exists, it prepends a new frontmatter block.
 func SetFrontmatterID(content string, notionID string) string {
+	hasTrailingNewline := strings.HasSuffix(content, "\n")
 	_, body := ParseFrontmatter(content)
 
 	fmBlock := extractFrontmatterBlock(content)
 	if fmBlock == "" {
-		return frontmatterDelimiter + "\nnotion-id: " + notionID + "\n" + frontmatterDelimiter + "\n\n" + body
+		return ensureTrailingNewline(frontmatterDelimiter+"\nnotion-id: "+notionID+"\n"+frontmatterDelimiter+"\n\n"+body, hasTrailingNewline)
 	}
 
 	var newLines []string
 	replaced := false
 	for _, line := range strings.Split(fmBlock, "\n") {
-		trimLine := strings.TrimSpace(line)
-		if k, _, ok := strings.Cut(trimLine, ":"); ok && strings.TrimSpace(k) == "notion-id" {
-			newLines = append(newLines, "notion-id: "+notionID)
-			replaced = true
-		} else {
-			newLines = append(newLines, line)
+		trimLine := strings.TrimRight(line, " \t\r")
+		isTopLevel := !strings.HasPrefix(trimLine, " ") && !strings.HasPrefix(trimLine, "\t")
+		if isTopLevel {
+			if k, _, ok := strings.Cut(trimLine, ":"); ok && strings.TrimSpace(k) == "notion-id" {
+				newLines = append(newLines, "notion-id: "+notionID)
+				replaced = true
+				continue
+			}
 		}
+		newLines = append(newLines, line)
 	}
 	if !replaced {
 		newLines = append(newLines, "notion-id: "+notionID)
 	}
 
-	return frontmatterDelimiter + "\n" + strings.Join(newLines, "\n") + "\n" + frontmatterDelimiter + "\n\n" + body
+	return ensureTrailingNewline(frontmatterDelimiter+"\n"+strings.Join(newLines, "\n")+"\n"+frontmatterDelimiter+"\n\n"+body, hasTrailingNewline)
+}
+
+func ensureTrailingNewline(s string, want bool) string {
+	has := strings.HasSuffix(s, "\n")
+	if want && !has {
+		return s + "\n"
+	}
+	if !want && has {
+		return strings.TrimRight(s, "\n")
+	}
+	return s
 }
 
 func extractFrontmatterBlock(content string) string {
-	trimmed := strings.TrimSpace(content)
+	trimmed := strings.TrimLeft(content, " \t")
 	if !strings.HasPrefix(trimmed, frontmatterDelimiter) {
 		return ""
 	}

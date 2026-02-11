@@ -455,7 +455,11 @@ func runPageSync(ctx *Context, file, title, parent, icon string) error {
 		output.PrintWarning("Page created but could not retrieve ID for frontmatter")
 	} else {
 		updated := cli.SetFrontmatterID(content, pageID)
-		if err := os.WriteFile(file, []byte(updated), 0o644); err != nil {
+		fileMode := os.FileMode(0o644)
+		if info, err := os.Stat(file); err == nil {
+			fileMode = info.Mode()
+		}
+		if err := os.WriteFile(file, []byte(updated), fileMode); err != nil {
 			output.PrintError(fmt.Errorf("page created but failed to update frontmatter: %w", err))
 			return err
 		}

@@ -47,6 +47,12 @@ func TestParseFrontmatter(t *testing.T) {
 			wantID:   "",
 			wantBody: "Some text\n---\nnotion-id: abc\n---\n",
 		},
+		{
+			name:     "indented notion-id is ignored",
+			input:    "---\nparent:\n  notion-id: nested\nnotion-id: top-level\n---\n\n# Hello",
+			wantID:   "top-level",
+			wantBody: "# Hello",
+		},
 	}
 
 	for _, tt := range tests {
@@ -86,6 +92,24 @@ func TestSetFrontmatterID(t *testing.T) {
 			input: "---\ntitle: My Page\n---\n\n# Hello",
 			id:    "abc123",
 			want:  "---\ntitle: My Page\nnotion-id: abc123\n---\n\n# Hello",
+		},
+		{
+			name:  "preserves trailing newline",
+			input: "# Hello\n\nWorld\n",
+			id:    "abc123",
+			want:  "---\nnotion-id: abc123\n---\n\n# Hello\n\nWorld\n",
+		},
+		{
+			name:  "no trailing newline preserved",
+			input: "# Hello\n\nWorld",
+			id:    "abc123",
+			want:  "---\nnotion-id: abc123\n---\n\n# Hello\n\nWorld",
+		},
+		{
+			name:  "does not replace indented notion-id",
+			input: "---\nparent:\n  notion-id: nested\n---\n\n# Hello",
+			id:    "new-id",
+			want:  "---\nparent:\n  notion-id: nested\nnotion-id: new-id\n---\n\n# Hello",
 		},
 	}
 
