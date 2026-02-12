@@ -176,6 +176,9 @@ func (c *Client) Search(ctx context.Context, query string, opts *SearchOptions) 
 	if err != nil {
 		return nil, err
 	}
+	if err := checkToolError(result); err != nil {
+		return nil, err
+	}
 
 	text := extractText(result)
 	var resp SearchResponse
@@ -206,6 +209,9 @@ func (c *Client) Fetch(ctx context.Context, id string) (*FetchResult, error) {
 		"id": id,
 	})
 	if err != nil {
+		return nil, err
+	}
+	if err := checkToolError(result); err != nil {
 		return nil, err
 	}
 
@@ -258,6 +264,9 @@ func (c *Client) CreatePage(ctx context.Context, req CreatePageRequest) (*Create
 
 	result, err := c.CallTool(ctx, "notion-create-pages", args)
 	if err != nil {
+		return nil, err
+	}
+	if err := checkToolError(result); err != nil {
 		return nil, err
 	}
 
@@ -316,8 +325,11 @@ func (c *Client) UpdatePage(ctx context.Context, req UpdatePageRequest) error {
 
 	args := map[string]any{"data": data}
 
-	_, err := c.CallTool(ctx, "notion-update-page", args)
-	return err
+	result, err := c.CallTool(ctx, "notion-update-page", args)
+	if err != nil {
+		return err
+	}
+	return checkToolError(result)
 }
 
 type GetCommentsRequest struct {
@@ -344,6 +356,9 @@ func (c *Client) GetComments(ctx context.Context, req GetCommentsRequest) (*Comm
 
 	result, err := c.CallTool(ctx, "notion-get-comments", args)
 	if err != nil {
+		return nil, err
+	}
+	if err := checkToolError(result); err != nil {
 		return nil, err
 	}
 
@@ -377,6 +392,9 @@ func (c *Client) CreateComment(ctx context.Context, req CreateCommentRequest) (*
 	if err != nil {
 		return nil, err
 	}
+	if err := checkToolError(result); err != nil {
+		return nil, err
+	}
 
 	text := extractText(result)
 	var comment Comment
@@ -401,6 +419,20 @@ func (s *staticTokenStore) GetToken(ctx context.Context) (*transport.Token, erro
 
 func (s *staticTokenStore) SaveToken(ctx context.Context, token *transport.Token) error {
 	return nil // no-op for static tokens
+}
+
+// checkToolError returns an error if the MCP tool result indicates failure.
+// The Notion MCP server signals errors via IsError=true with the error message
+// in the text content, rather than returning a transport-level error.
+func checkToolError(result *mcp.CallToolResult) error {
+	if result == nil || !result.IsError {
+		return nil
+	}
+	msg := extractText(result)
+	if msg == "" {
+		msg = "tool call failed"
+	}
+	return fmt.Errorf("notion API error: %s", msg)
 }
 
 func extractText(result *mcp.CallToolResult) string {
