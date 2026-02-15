@@ -59,7 +59,7 @@ func runPageList(ctx *Context, query string, limit int) error {
 func filterPages(results []mcp.SearchResult, limit int) []output.Page {
 	pages := make([]output.Page, 0)
 	for _, r := range results {
-		if r.ObjectType != "page" && r.Object != "page" {
+		if r.ObjectType != "page" && r.Object != "page" && r.Type != "page" {
 			continue
 		}
 		if limit > 0 && len(pages) >= limit {
@@ -185,19 +185,20 @@ func runPageCreate(ctx *Context, title, parent, content string) error {
 }
 
 type PageUploadCmd struct {
-	File   string `arg:"" help:"Markdown file to upload" type:"existingfile"`
-	Title  string `help:"Page title (default: filename or first heading)" short:"t"`
-	Parent string `help:"Parent page URL, name, or ID" short:"p"`
-	Icon   string `help:"Emoji icon for the page" short:"i"`
-	JSON   bool   `help:"Output as JSON" short:"j"`
+	File     string `arg:"" help:"Markdown file to upload" type:"existingfile"`
+	Title    string `help:"Page title (default: filename or first heading)" short:"t"`
+	Parent   string `help:"Parent page URL, name, or ID" short:"p"`
+	ParentDB string `help:"Parent database URL, name, or ID" name:"parent-db" short:"d"`
+	Icon     string `help:"Emoji icon for the page" short:"i"`
+	JSON     bool   `help:"Output as JSON" short:"j"`
 }
 
 func (c *PageUploadCmd) Run(ctx *Context) error {
 	ctx.JSON = c.JSON
-	return runPageUpload(ctx, c.File, c.Title, c.Parent, c.Icon)
+	return runPageUpload(ctx, c.File, c.Title, c.Parent, c.ParentDB, c.Icon)
 }
 
-func runPageUpload(ctx *Context, file, title, parent, icon string) error {
+func runPageUpload(ctx *Context, file, title, parent, parentDB, icon string) error {
 	content, err := os.ReadFile(file)
 	if err != nil {
 		output.PrintError(err)
@@ -225,20 +226,30 @@ func runPageUpload(ctx *Context, file, title, parent, icon string) error {
 
 	bgCtx := context.Background()
 
-	parentID := parent
-	if parent != "" {
-		resolved, err := cli.ResolvePageID(bgCtx, client, parent)
+	req := mcp.CreatePageRequest{
+		Title:   title,
+		Content: markdown,
+	}
+
+	if parentDB != "" {
+		dbID, err := cli.ResolveDatabaseID(bgCtx, client, parentDB)
 		if err != nil {
 			output.PrintError(err)
 			return err
 		}
-		parentID = resolved
-	}
-
-	req := mcp.CreatePageRequest{
-		Title:        title,
-		ParentPageID: parentID,
-		Content:      markdown,
+		dbID, err = client.ResolveDataSourceID(bgCtx, dbID)
+		if err != nil {
+			output.PrintError(err)
+			return err
+		}
+		req.ParentDatabaseID = dbID
+	} else if parent != "" {
+		parentID, err := cli.ResolvePageID(bgCtx, client, parent)
+		if err != nil {
+			output.PrintError(err)
+			return err
+		}
+		req.ParentPageID = parentID
 	}
 
 	resp, err := client.CreatePage(bgCtx, req)
@@ -296,11 +307,11 @@ func extractEmojiFromTitle(title string) (icon, cleanTitle string) {
 }
 
 type PageEditCmd struct {
-	Page      string `arg:"" help:"Page URL, name, or ID"`
-	Replace   string `help:"Replace entire content with this text" xor:"action"`
-	Find      string `help:"Text to find (use ... for ellipsis)" xor:"action"`
+	Page        string `arg:"" help:"Page URL, name, or ID"`
+	Replace     string `help:"Replace entire content with this text" xor:"action"`
+	Find        string `help:"Text to find (use ... for ellipsis)" xor:"action"`
 	ReplaceWith string `help:"Text to replace with (requires --find)" name:"replace-with"`
-	Append    string `help:"Append text after selection (requires --find)" xor:"action"`
+	Append      string `help:"Append text after selection (requires --find)" xor:"action"`
 }
 
 func (c *PageEditCmd) Run(ctx *Context) error {
@@ -359,19 +370,20 @@ func runPageEdit(ctx *Context, page, replace, find, replaceWith, appendText stri
 }
 
 type PageSyncCmd struct {
-	File   string `arg:"" help:"Markdown file to sync" type:"existingfile"`
-	Title  string `help:"Page title (default: filename or first heading)" short:"t"`
-	Parent string `help:"Parent page URL, name, or ID" short:"p"`
-	Icon   string `help:"Emoji icon for the page" short:"i"`
-	JSON   bool   `help:"Output as JSON" short:"j"`
+	File     string `arg:"" help:"Markdown file to sync" type:"existingfile"`
+	Title    string `help:"Page title (default: filename or first heading)" short:"t"`
+	Parent   string `help:"Parent page URL, name, or ID" short:"p"`
+	ParentDB string `help:"Parent database URL, name, or ID" name:"parent-db" short:"d"`
+	Icon     string `help:"Emoji icon for the page" short:"i"`
+	JSON     bool   `help:"Output as JSON" short:"j"`
 }
 
 func (c *PageSyncCmd) Run(ctx *Context) error {
 	ctx.JSON = c.JSON
-	return runPageSync(ctx, c.File, c.Title, c.Parent, c.Icon)
+	return runPageSync(ctx, c.File, c.Title, c.Parent, c.ParentDB, c.Icon)
 }
 
-func runPageSync(ctx *Context, file, title, parent, icon string) error {
+func runPageSync(ctx *Context, file, title, parent, parentDB, icon string) error {
 	raw, err := os.ReadFile(file)
 	if err != nil {
 		output.PrintError(err)
@@ -428,20 +440,30 @@ func runPageSync(ctx *Context, file, title, parent, icon string) error {
 		return nil
 	}
 
-	parentID := parent
-	if parent != "" {
-		resolved, err := cli.ResolvePageID(bgCtx, client, parent)
+	req := mcp.CreatePageRequest{
+		Title:   title,
+		Content: body,
+	}
+
+	if parentDB != "" {
+		dbID, err := cli.ResolveDatabaseID(bgCtx, client, parentDB)
 		if err != nil {
 			output.PrintError(err)
 			return err
 		}
-		parentID = resolved
-	}
-
-	req := mcp.CreatePageRequest{
-		Title:        title,
-		ParentPageID: parentID,
-		Content:      body,
+		dbID, err = client.ResolveDataSourceID(bgCtx, dbID)
+		if err != nil {
+			output.PrintError(err)
+			return err
+		}
+		req.ParentDatabaseID = dbID
+	} else if parent != "" {
+		parentID, err := cli.ResolvePageID(bgCtx, client, parent)
+		if err != nil {
+			output.PrintError(err)
+			return err
+		}
+		req.ParentPageID = parentID
 	}
 
 	resp, err := client.CreatePage(bgCtx, req)

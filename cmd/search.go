@@ -49,9 +49,16 @@ func convertSearchResults(mcpResults []mcp.SearchResult, limit int) []output.Sea
 		if limit > 0 && i >= limit {
 			break
 		}
+		resultType := r.ObjectType
+		if resultType == "" {
+			resultType = r.Type
+		}
+		if resultType == "" {
+			resultType = r.Object
+		}
 		results = append(results, output.SearchResult{
 			ID:    r.ID,
-			Type:  r.ObjectType,
+			Type:  resultType,
 			Title: r.Title,
 			URL:   r.URL,
 		})

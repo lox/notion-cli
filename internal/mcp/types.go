@@ -163,6 +163,7 @@ type SearchResult struct {
 	Title      string `json:"title,omitempty"`
 	URL        string `json:"url,omitempty"`
 	ObjectType string `json:"object_type,omitempty"`
+	Type       string `json:"type,omitempty"`
 }
 
 type SearchResponse struct {

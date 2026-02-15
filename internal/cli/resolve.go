@@ -14,7 +14,7 @@ import (
 type PageRefKind int
 
 const (
-	RefID   PageRefKind = iota
+	RefID PageRefKind = iota
 	RefURL
 	RefName
 )
@@ -109,7 +109,7 @@ func resolvePageByName(ctx context.Context, client *mcp.Client, name string) (st
 
 	var exactMatches []mcp.SearchResult
 	for _, r := range resp.Results {
-		if r.ObjectType != "page" && r.Object != "page" {
+		if r.ObjectType != "page" && r.Object != "page" && r.Type != "page" {
 			continue
 		}
 		if strings.EqualFold(r.Title, name) {
@@ -128,7 +128,7 @@ func resolvePageByName(ctx context.Context, client *mcp.Client, name string) (st
 	// No exact match — check for partial matches to give a helpful error
 	var partialMatches []mcp.SearchResult
 	for _, r := range resp.Results {
-		if r.ObjectType != "page" && r.Object != "page" {
+		if r.ObjectType != "page" && r.Object != "page" && r.Type != "page" {
 			continue
 		}
 		if strings.Contains(strings.ToLower(r.Title), strings.ToLower(name)) {
@@ -163,6 +163,69 @@ func ambiguousError(name string, matches []mcp.SearchResult) error {
 	}
 	b.WriteString("Use a page URL or ID to be specific.")
 	return &output.UserError{Message: b.String()}
+}
+
+// ResolveDatabaseID resolves any database reference (URL, ID, or name) to a database ID.
+// Like ResolvePageID but filters for databases/data sources.
+func ResolveDatabaseID(ctx context.Context, client *mcp.Client, input string) (string, error) {
+	ref := ParsePageRef(input)
+	switch ref.Kind {
+	case RefID:
+		return ref.ID, nil
+	case RefURL:
+		if id, ok := ExtractNotionUUID(input); ok {
+			return id, nil
+		}
+		return "", &output.UserError{Message: fmt.Sprintf("could not extract database ID from URL: %s\nUse the database ID directly instead.", input)}
+	case RefName:
+		return resolveDatabaseByName(ctx, client, input)
+	}
+	return "", &output.UserError{Message: "invalid database reference: " + input}
+}
+
+func isDatabaseResult(r mcp.SearchResult) bool {
+	return r.ObjectType == "database" || r.Object == "database" || r.ObjectType == "data_source" || r.Type == "database"
+}
+
+func resolveDatabaseByName(ctx context.Context, client *mcp.Client, name string) (string, error) {
+	resp, err := client.Search(ctx, name, &mcp.SearchOptions{ContentSearchMode: "workspace_search"})
+	if err != nil {
+		return "", err
+	}
+
+	var exactMatches []mcp.SearchResult
+	for _, r := range resp.Results {
+		if !isDatabaseResult(r) {
+			continue
+		}
+		if strings.EqualFold(r.Title, name) {
+			exactMatches = append(exactMatches, r)
+		}
+	}
+
+	if len(exactMatches) == 1 {
+		return exactMatches[0].ID, nil
+	}
+
+	if len(exactMatches) > 1 {
+		return "", ambiguousError(name, exactMatches)
+	}
+
+	var partialMatches []mcp.SearchResult
+	for _, r := range resp.Results {
+		if !isDatabaseResult(r) {
+			continue
+		}
+		if strings.Contains(strings.ToLower(r.Title), strings.ToLower(name)) {
+			partialMatches = append(partialMatches, r)
+		}
+	}
+
+	if len(partialMatches) == 0 {
+		return "", &output.UserError{Message: "database not found: " + name}
+	}
+
+	return "", ambiguousError(name, partialMatches)
 }
 
 // IsEmoji returns true if the rune is an emoji character.
