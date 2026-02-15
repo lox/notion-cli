@@ -41,7 +41,7 @@ For CI/headless environments, set `NOTION_ACCESS_TOKEN` environment variable.
 ```
 notion-cli auth            # Manage authentication
 notion-cli page            # Manage pages (list, view, create, upload, edit)
-notion-cli db              # Manage databases (list, query)
+notion-cli db              # Manage databases (list, query, create entries)
 notion-cli search          # Search the workspace
 notion-cli comment         # Manage comments (list, create)
 notion-cli tools           # List available MCP tools
@@ -84,12 +84,14 @@ notion-cli page create --title "Child" --parent <page-id>       # Parent by ID
 notion-cli page upload ./document.md
 notion-cli page upload ./doc.md --title "Custom Title"
 notion-cli page upload ./doc.md --parent "Parent Page Name"
+notion-cli page upload ./doc.md --parent <database-id>      # Upload as database entry
 
 # Sync a markdown file (create or update)
 # First run creates the page and writes notion-id to the file's frontmatter.
 # Subsequent runs update the page content using the stored notion-id.
 notion-cli page sync ./document.md
 notion-cli page sync ./document.md --parent "Engineering"   # Set parent on first sync
+notion-cli page sync ./document.md --parent <database-id>   # Sync as database entry
 notion-cli page sync ./document.md --title "Custom Title"
 
 # Edit a page
@@ -100,13 +102,28 @@ notion-cli page edit <page> --find "section" --append "additional content"
 
 ### Databases
 
+All database commands accept a **URL**, **name**, or **ID** to identify databases.
+
 ```bash
+# List databases
 notion-cli db list                          # List databases
+notion-cli db list -q "project"             # Filter by name
 notion-cli db list --json
 
+# Query a database
 notion-cli db query <database-url-or-id>    # Query a database
 notion-cli db query <id> --json
+
+# Create an entry in a database
+notion-cli db create <database> --title "Entry Title"
+notion-cli db create <database> -t "Title" --prop "Status=Not started"
+notion-cli db create <database> -t "Title" --prop "date:Due:start=2026-03-01"
+notion-cli db create <database> -t "Title" --content "Body text"
+notion-cli db create <database> -t "Title" --file ./notes.md    # Body from file
+notion-cli db create <database> -t "Title" --json
 ```
+
+**Property format:** Use `--prop Key=Value` for text/status properties. Date properties use expanded keys: `--prop "date:Date Field:start=2026-01-15"`.
 
 ### Comments
 
@@ -130,6 +147,8 @@ notion-cli search "api" --json | jq '.[] | .title'
 
 1. **Search first** - Use `notion-cli search` to find pages before operating on them
 2. **Use URLs or IDs** - Both work for page/database references
-3. **Check --help** - Every command has detailed help: `notion-cli page edit --help`
-4. **Raw output** - Use `--raw` with `page view` to see the original Notion markup
-5. **JSON for parsing** - Use `--json` when you need to extract specific fields
+3. **Auto-detect parents** - `--parent` on `page sync`/`page upload` auto-detects whether the parent is a page or database
+4. **Query databases first** - Use `notion-cli db query <id>` to see the schema and property types before creating entries
+5. **Check --help** - Every command has detailed help: `notion-cli page edit --help`
+6. **Raw output** - Use `--raw` with `page view` to see the original Notion markup
+7. **JSON for parsing** - Use `--json` when you need to extract specific fields

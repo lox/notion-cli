@@ -74,12 +74,14 @@ notion-cli page create --title "T" --parent <page-id>
 notion-cli page upload ./document.md                        # Title from # heading or filename
 notion-cli page upload ./document.md --title "Custom Title" # Explicit title
 notion-cli page upload ./document.md --parent "Engineering" # Parent by name or ID
+notion-cli page upload ./document.md --parent <database-id> # Upload as database entry
 notion-cli page upload ./document.md --icon "📄"             # Set emoji icon
 
 # Sync a markdown file (create or update)
 notion-cli page sync ./document.md                          # Creates page, writes notion-id to frontmatter
 notion-cli page sync ./document.md                          # Updates page using notion-id from frontmatter
 notion-cli page sync ./document.md --parent "Engineering"   # Set parent on first sync
+notion-cli page sync ./document.md --parent <database-id>   # Sync as database entry
 
 # Edit an existing page
 notion-cli page edit <url> --replace "New content"                      # Replace all content
@@ -99,11 +101,22 @@ notion-cli search "query" --json               # Output as JSON
 
 ```bash
 notion-cli db list                             # List databases
+notion-cli db list -q "project"                # Filter by name
 notion-cli db list --json                      # Output as JSON
 
 notion-cli db query <database-id>              # Query database
 notion-cli db query <id> --json                # Output as JSON
+
+# Create an entry in a database
+notion-cli db create <database> --title "Entry Title"
+notion-cli db create <database> -t "Title" --prop "Status=Not started"
+notion-cli db create <database> -t "Title" --prop "Status=Done" --prop "date:Due:start=2026-03-01"
+notion-cli db create <database> -t "Title" --content "Body text"
+notion-cli db create <database> -t "Title" --file ./notes.md
+notion-cli db create <database> -t "Title" --json
 ```
+
+The `<database>` argument accepts a URL, ID, or name. Date properties use the expanded key format: `date:<Property Name>:start`, `date:<Property Name>:end`.
 
 ### Comments
 
