@@ -14,7 +14,7 @@ import (
 type PageRefKind int
 
 const (
-	RefID   PageRefKind = iota
+	RefID PageRefKind = iota
 	RefURL
 	RefName
 )

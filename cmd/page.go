@@ -307,11 +307,11 @@ func extractEmojiFromTitle(title string) (icon, cleanTitle string) {
 }
 
 type PageEditCmd struct {
-	Page      string `arg:"" help:"Page URL, name, or ID"`
-	Replace   string `help:"Replace entire content with this text" xor:"action"`
-	Find      string `help:"Text to find (use ... for ellipsis)" xor:"action"`
+	Page        string `arg:"" help:"Page URL, name, or ID"`
+	Replace     string `help:"Replace entire content with this text" xor:"action"`
+	Find        string `help:"Text to find (use ... for ellipsis)" xor:"action"`
 	ReplaceWith string `help:"Text to replace with (requires --find)" name:"replace-with"`
-	Append    string `help:"Append text after selection (requires --find)" xor:"action"`
+	Append      string `help:"Append text after selection (requires --find)" xor:"action"`
 }
 
 func (c *PageEditCmd) Run(ctx *Context) error {
@@ -511,4 +511,3 @@ func runPageSync(ctx *Context, file, title, parent, parentDB, icon string) error
 	}
 	return nil
 }
-
