@@ -2,6 +2,8 @@ package cli
 
 import (
 	"testing"
+
+	"github.com/lox/notion-cli/internal/mcp"
 )
 
 func TestParsePageRef(t *testing.T) {
@@ -38,6 +40,30 @@ func TestParsePageRef(t *testing.T) {
 			}
 			if tt.wantID != "" && ref.ID != tt.wantID {
 				t.Errorf("ParsePageRef(%q).ID = %q, want %q", tt.input, ref.ID, tt.wantID)
+			}
+		})
+	}
+}
+
+func TestIsDatabaseResult(t *testing.T) {
+	tests := []struct {
+		name   string
+		result mcp.SearchResult
+		want   bool
+	}{
+		{"type=database", mcp.SearchResult{Type: "database"}, true},
+		{"object_type=database", mcp.SearchResult{ObjectType: "database"}, true},
+		{"object=database", mcp.SearchResult{Object: "database"}, true},
+		{"object_type=data_source", mcp.SearchResult{ObjectType: "data_source"}, true},
+		{"type=page", mcp.SearchResult{Type: "page"}, false},
+		{"empty", mcp.SearchResult{}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isDatabaseResult(tt.result)
+			if got != tt.want {
+				t.Errorf("isDatabaseResult() = %v, want %v", got, tt.want)
 			}
 		})
 	}
