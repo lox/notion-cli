@@ -83,7 +83,7 @@ type DBCreateCmd struct {
 	Database string   `arg:"" help:"Database URL, ID, or name"`
 	Title    string   `help:"Entry title" short:"t" required:""`
 	Prop     []string `help:"Property key=value (repeatable)" short:"P"`
-	Content  string   `help:"Inline markdown body" short:"c"`
+	Content  string   `help:"Inline markdown body" short:"c" xor:"body"`
 	File     string   `help:"Read body from markdown file" short:"f" type:"existingfile" xor:"body"`
 	JSON     bool     `help:"Output as JSON" short:"j"`
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/client"
@@ -239,12 +240,11 @@ type CreatePageResponse struct {
 }
 
 func (c *Client) CreatePage(ctx context.Context, req CreatePageRequest) (*CreatePageResponse, error) {
-	props := map[string]any{
-		"title": req.Title,
-	}
+	props := map[string]any{}
 	for k, v := range req.Properties {
 		props[k] = v
 	}
+	props["title"] = req.Title
 
 	pageSpec := map[string]any{
 		"properties": props,
@@ -308,16 +308,9 @@ func (c *Client) ResolveDataSourceID(ctx context.Context, id string) (string, er
 	}
 
 	// Look for collection://UUID pattern in the content
-	if idx := strings.Index(result.Content, "collection://"); idx >= 0 {
-		start := idx + len("collection://")
-		end := start
-		for end < len(result.Content) && result.Content[end] != '"' && result.Content[end] != '}' && result.Content[end] != ' ' && result.Content[end] != '\n' {
-			end++
-		}
-		dsID := result.Content[start:end]
-		if len(strings.ReplaceAll(dsID, "-", "")) == 32 {
-			return dsID, nil
-		}
+	re := regexp.MustCompile(`collection://([a-fA-F0-9-]{32,36})`)
+	if m := re.FindStringSubmatch(result.Content); m != nil {
+		return m[1], nil
 	}
 
 	return id, nil // fallback to original ID
