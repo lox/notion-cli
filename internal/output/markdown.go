@@ -223,7 +223,7 @@ func formatDatabaseContent(content string) string {
 						}
 						typeStr = fmt.Sprintf("%s (%s)", prop.Type, strings.Join(opts, ", "))
 					}
-					out.WriteString(fmt.Sprintf("| %s | %s |\n", prop.Name, typeStr))
+					fmt.Fprintf(&out, "| %s | %s |\n", prop.Name, typeStr)
 				}
 				out.WriteString("\n")
 			}
@@ -245,7 +245,7 @@ func formatDatabaseContent(content string) string {
 					Type string `json:"type"`
 				}
 				if err := json.Unmarshal([]byte(viewJSON), &view); err == nil {
-					out.WriteString(fmt.Sprintf("- **%s** (%s)\n", view.Name, view.Type))
+					fmt.Fprintf(&out, "- **%s** (%s)\n", view.Name, view.Type)
 				}
 			}
 		}
