@@ -121,6 +121,11 @@ func RenderPage(content string) error {
 	return nil
 }
 
+type ancestor struct {
+	Title string
+	URL   string
+}
+
 type pageMetadata struct {
 	Title     string
 	URL       string
@@ -128,6 +133,7 @@ type pageMetadata struct {
 	Author    string
 	Type      string
 	ExtraInfo string
+	Ancestors []ancestor
 }
 
 func parseNotionResponse(content string) (*pageMetadata, string) {
@@ -137,6 +143,23 @@ func parseNotionResponse(content string) (*pageMetadata, string) {
 	pageTagRe := regexp.MustCompile(`<page url="\{\{([^}]+)\}\}"`)
 	if match := pageTagRe.FindStringSubmatch(content); len(match) > 1 {
 		meta.URL = match[1]
+	}
+
+	// Extract ancestor path from <ancestor-path> tag
+	ancestorRe := regexp.MustCompile(`<(?:parent-page|ancestor-\d+-page)\s+url="([^"]*)"(?:\s+title="([^"]*)")?\s*/?>`)
+	if start := strings.Index(content, "<ancestor-path>"); start != -1 {
+		if end := strings.Index(content[start:], "</ancestor-path>"); end != -1 {
+			block := content[start : start+end]
+			matches := ancestorRe.FindAllStringSubmatch(block, -1)
+			// Reverse: MCP returns parent-first, we want root-first
+			for i := len(matches) - 1; i >= 0; i-- {
+				m := matches[i]
+				meta.Ancestors = append(meta.Ancestors, ancestor{
+					Title: m[2],
+					URL:   cleanNotionURL(m[1]),
+				})
+			}
+		}
 	}
 
 	// Extract properties JSON from <properties> tag
@@ -271,8 +294,16 @@ func renderPageHeader(meta *pageMetadata, isTTY bool) {
 		titleStyle := color.New(color.Bold, color.FgWhite)
 		urlStyle := color.New(color.Faint)
 		labelStyle := color.New(color.Faint)
+		pathStyle := color.New(color.Faint)
 
 		fmt.Println()
+		if len(meta.Ancestors) > 0 {
+			parts := make([]string, len(meta.Ancestors))
+			for i, a := range meta.Ancestors {
+				parts[i] = a.Title
+			}
+			_, _ = pathStyle.Println(strings.Join(parts, " › "))
+		}
 		if meta.Title != "" {
 			_, _ = titleStyle.Println(meta.Title)
 		}
@@ -287,6 +318,13 @@ func renderPageHeader(meta *pageMetadata, isTTY bool) {
 		fmt.Println(strings.Repeat("─", 40))
 		fmt.Println()
 	} else {
+		if len(meta.Ancestors) > 0 {
+			parts := make([]string, len(meta.Ancestors))
+			for i, a := range meta.Ancestors {
+				parts[i] = a.Title
+			}
+			fmt.Printf("Path: %s\n", strings.Join(parts, " > "))
+		}
 		if meta.Title != "" {
 			fmt.Printf("Title: %s\n", meta.Title)
 		}
