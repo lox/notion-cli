@@ -8,9 +8,13 @@ import (
 	"github.com/lox/notion-cli/internal/output"
 )
 
-type ToolsCmd struct{}
+type ToolsCmd struct {
+	JSON bool `help:"Output as JSON" short:"j"`
+}
 
 func (c *ToolsCmd) Run(ctx *Context) error {
+	ctx.JSON = c.JSON
+
 	client, err := cli.RequireClient()
 	if err != nil {
 		return err
@@ -22,6 +26,10 @@ func (c *ToolsCmd) Run(ctx *Context) error {
 	if err != nil {
 		output.PrintError(err)
 		return err
+	}
+
+	if c.JSON {
+		return writeJSON(tools)
 	}
 
 	for _, t := range tools {
