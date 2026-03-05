@@ -321,7 +321,8 @@ type UpdatePageRequest struct {
 	Command string // "replace_content", "replace_content_range", "insert_content_after", "update_properties"
 
 	// For replace_content
-	NewContent string
+	NewContent           string
+	AllowDeletingContent bool
 
 	// For replace_content_range and insert_content_after
 	Selection string
@@ -335,6 +336,10 @@ func (c *Client) UpdatePage(ctx context.Context, req UpdatePageRequest) error {
 	data := map[string]any{
 		"page_id": req.PageID,
 		"command": req.Command,
+	}
+
+	if req.AllowDeletingContent {
+		data["allow_deleting_content"] = true
 	}
 
 	switch req.Command {
