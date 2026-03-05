@@ -307,18 +307,19 @@ func extractEmojiFromTitle(title string) (icon, cleanTitle string) {
 }
 
 type PageEditCmd struct {
-	Page        string `arg:"" help:"Page URL, name, or ID"`
-	Replace     string `help:"Replace entire content with this text" xor:"action"`
-	Find        string `help:"Text to find (use ... for ellipsis)" xor:"action"`
-	ReplaceWith string `help:"Text to replace with (requires --find)" name:"replace-with"`
-	Append      string `help:"Append text after selection (requires --find)" xor:"action"`
+	Page                 string `arg:"" help:"Page URL, name, or ID"`
+	Replace              string `help:"Replace entire content with this text" xor:"action"`
+	Find                 string `help:"Text to find (use ... for ellipsis)" xor:"action"`
+	ReplaceWith          string `help:"Text to replace with (requires --find)" name:"replace-with"`
+	Append               string `help:"Append text after selection (requires --find)" xor:"action"`
+	AllowDeletingContent bool   `help:"Allow deleting child pages/databases when replacing content" name:"allow-deleting-content"`
 }
 
 func (c *PageEditCmd) Run(ctx *Context) error {
-	return runPageEdit(ctx, c.Page, c.Replace, c.Find, c.ReplaceWith, c.Append)
+	return runPageEdit(ctx, c.Page, c.Replace, c.Find, c.ReplaceWith, c.Append, c.AllowDeletingContent)
 }
 
-func runPageEdit(ctx *Context, page, replace, find, replaceWith, appendText string) error {
+func runPageEdit(ctx *Context, page, replace, find, replaceWith, appendText string, allowDeletingContent bool) error {
 	client, err := cli.RequireClient()
 	if err != nil {
 		return err
@@ -343,6 +344,7 @@ func runPageEdit(ctx *Context, page, replace, find, replaceWith, appendText stri
 
 	var req mcp.UpdatePageRequest
 	req.PageID = pageID
+	req.AllowDeletingContent = allowDeletingContent
 
 	switch {
 	case replace != "":
