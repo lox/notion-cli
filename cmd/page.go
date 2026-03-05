@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -307,14 +308,18 @@ func extractEmojiFromTitle(title string) (icon, cleanTitle string) {
 }
 
 type PageEditCmd struct {
-	Page        string `arg:"" help:"Page URL, name, or ID"`
-	Replace     string `help:"Replace entire content with this text" xor:"action"`
-	Find        string `help:"Text to find (use ... for ellipsis)" xor:"action"`
-	ReplaceWith string `help:"Text to replace with (requires --find)" name:"replace-with"`
-	Append      string `help:"Append text after selection (requires --find)" xor:"action"`
+	Page        string   `arg:"" help:"Page URL, name, or ID"`
+	Replace     string   `help:"Replace entire content with this text" xor:"action"`
+	Find        string   `help:"Text to find (use ... for ellipsis)" xor:"action"`
+	ReplaceWith string   `help:"Text to replace with (requires --find)" name:"replace-with"`
+	Append      string   `help:"Append text after selection (requires --find)" xor:"action"`
+	Prop        []string `help:"Set page properties (key=value, repeatable)" short:"P" xor:"action"`
 }
 
 func (c *PageEditCmd) Run(ctx *Context) error {
+	if len(c.Prop) > 0 {
+		return runPageEditProps(ctx, c.Page, c.Prop)
+	}
 	return runPageEdit(ctx, c.Page, c.Replace, c.Find, c.ReplaceWith, c.Append)
 }
 
@@ -357,7 +362,59 @@ func runPageEdit(ctx *Context, page, replace, find, replaceWith, appendText stri
 		req.Selection = find
 		req.NewStr = appendText
 	default:
-		return &output.UserError{Message: "specify --replace, or --find with --replace-with or --append"}
+		return &output.UserError{Message: "specify --replace, --prop, or --find with --replace-with or --append"}
+	}
+
+	if err := client.UpdatePage(bgCtx, req); err != nil {
+		output.PrintError(err)
+		return err
+	}
+
+	output.PrintSuccess("Page updated")
+	return nil
+}
+
+func runPageEditProps(ctx *Context, page string, props []string) error {
+	client, err := cli.RequireClient()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = client.Close() }()
+
+	bgCtx := context.Background()
+
+	ref := cli.ParsePageRef(page)
+	pageID := page
+	switch ref.Kind {
+	case cli.RefName:
+		resolved, err := cli.ResolvePageID(bgCtx, client, page)
+		if err != nil {
+			output.PrintError(err)
+			return err
+		}
+		pageID = resolved
+	case cli.RefID:
+		pageID = ref.ID
+	}
+
+	properties := make(map[string]any)
+	for _, p := range props {
+		k, v, ok := strings.Cut(p, "=")
+		if !ok {
+			return &output.UserError{Message: "invalid property format (expected key=value): " + p}
+		}
+		var parsed any
+		if err := json.Unmarshal([]byte(v), &parsed); err == nil {
+			properties[k] = parsed
+		} else {
+			properties[k] = v
+		}
+	}
+
+	req := mcp.UpdatePageRequest{
+		PageID:     pageID,
+		Command:    "update_properties",
+		Properties: properties,
 	}
 
 	if err := client.UpdatePage(bgCtx, req); err != nil {
