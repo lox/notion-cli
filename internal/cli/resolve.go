@@ -26,9 +26,17 @@ type PageRef struct {
 }
 
 var hexPattern = regexp.MustCompile(`[0-9a-fA-F]{32}`)
+var uuidPattern = regexp.MustCompile(`[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}`)
 
 // ParsePageRef classifies an input string as a URL, ID, or name.
 func ParsePageRef(s string) PageRef {
+	if strings.HasPrefix(s, "collection://") {
+		if id, ok := ExtractNotionUUID(s); ok {
+			return PageRef{Kind: RefID, Raw: s, ID: id}
+		}
+		return PageRef{Kind: RefURL, Raw: s}
+	}
+
 	if strings.HasPrefix(s, "http://") || strings.HasPrefix(s, "https://") {
 		if id, ok := ExtractNotionUUID(s); ok {
 			return PageRef{Kind: RefID, Raw: s, ID: id}
@@ -68,6 +76,10 @@ func ExtractNotionUUID(s string) (string, bool) {
 
 	if len(cleaned) == 32 && isAllHex(cleaned) {
 		return formatUUID(cleaned), true
+	}
+
+	if match := uuidPattern.FindString(s); match != "" {
+		return strings.ToLower(match), true
 	}
 
 	match := hexPattern.FindString(s)

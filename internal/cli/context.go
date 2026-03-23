@@ -3,6 +3,8 @@ package cli
 import (
 	"context"
 	"fmt"
+	"io"
+	"os"
 	"time"
 
 	"github.com/lox/notion-cli/internal/mcp"
@@ -10,6 +12,7 @@ import (
 )
 
 var accessToken string
+var authRefreshNoticeWriter io.Writer = os.Stderr
 
 func SetAccessToken(token string) {
 	accessToken = token
@@ -22,8 +25,7 @@ func GetClient() (*mcp.Client, error) {
 	if accessToken == "" {
 		if err := autoRefreshIfNeeded(ctx); err != nil {
 			// Non-fatal, but surface guidance to reduce auth-related command failures.
-			output.PrintInfo("Auth token refresh skipped: " + err.Error())
-			output.PrintInfo("Run 'notion-cli auth status' and, if needed, 'notion-cli auth login' or 'notion-cli auth refresh'.")
+			printAuthRefreshGuidance(err)
 		}
 	}
 
@@ -76,4 +78,13 @@ func autoRefreshIfNeeded(ctx context.Context) error {
 
 func RequireClient() (*mcp.Client, error) {
 	return GetClient()
+}
+
+func printAuthRefreshGuidance(err error) {
+	if err == nil {
+		return
+	}
+
+	_, _ = fmt.Fprintf(authRefreshNoticeWriter, "Note: Auth token refresh skipped: %s\n", err.Error())
+	_, _ = fmt.Fprintln(authRefreshNoticeWriter, "Note: Run 'notion-cli auth status' and, if needed, 'notion-cli auth login' or 'notion-cli auth refresh'.")
 }

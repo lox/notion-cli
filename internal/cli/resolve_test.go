@@ -23,6 +23,9 @@ func TestParsePageRef(t *testing.T) {
 		{"https://www.notion.so/My-Page-12345678abcdef1234567890abcdef12", RefID, "12345678-abcd-ef12-3456-7890abcdef12"},
 		{"https://notion.so/workspace/Page-Title-12345678abcdef1234567890abcdef12?v=abc", RefID, "12345678-abcd-ef12-3456-7890abcdef12"},
 
+		// Data source URLs
+		{"collection://12345678-abcd-ef12-3456-7890abcdef12", RefID, "12345678-abcd-ef12-3456-7890abcdef12"},
+
 		// URL without extractable ID
 		{"https://example.com/some-page", RefURL, ""},
 
