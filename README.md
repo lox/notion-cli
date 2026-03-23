@@ -131,6 +131,8 @@ notion-cli comment create <page-id> --content "Comment text"
 
 ```bash
 notion-cli version                             # Show version
+notion-cli --version                           # Alias for version
+notion-cli -v                                  # Short alias for version
 notion-cli --help                              # Show help
 ```
 

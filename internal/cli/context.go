@@ -21,8 +21,9 @@ func GetClient() (*mcp.Client, error) {
 	// Auto-refresh if token is expired or expiring soon
 	if accessToken == "" {
 		if err := autoRefreshIfNeeded(ctx); err != nil {
-			// Non-fatal, will try to proceed anyway
-			_ = err
+			// Non-fatal, but surface guidance to reduce auth-related command failures.
+			output.PrintInfo("Auth token refresh skipped: " + err.Error())
+			output.PrintInfo("Run 'notion-cli auth status' and, if needed, 'notion-cli auth login' or 'notion-cli auth refresh'.")
 		}
 	}
 

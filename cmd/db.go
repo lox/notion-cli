@@ -171,10 +171,24 @@ func runDBQuery(ctx *Context, id string) error {
 	defer func() { _ = client.Close() }()
 
 	bgCtx := context.Background()
-	result, err := client.Fetch(bgCtx, id)
+	resolvedID, err := cli.ResolveDatabaseID(bgCtx, client, id)
 	if err != nil {
 		output.PrintError(err)
 		return err
+	}
+
+	result, err := client.Fetch(bgCtx, resolvedID)
+	if err != nil {
+		output.PrintError(err)
+		return err
+	}
+
+	if ctx.JSON {
+		return output.PrintDatabases([]output.Database{{
+			ID:    resolvedID,
+			Title: result.Title,
+			URL:   result.URL,
+		}}, true)
 	}
 
 	if result.Content == "" {

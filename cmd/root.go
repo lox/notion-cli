@@ -22,6 +22,6 @@ type VersionCmd struct {
 }
 
 func (c *VersionCmd) Run(ctx *Context) error {
-	println("notion version " + c.Version)
+	println("notion-cli version " + c.Version)
 	return nil
 }

@@ -130,7 +130,7 @@ type AuthRequiredError struct {
 }
 
 func (e *AuthRequiredError) Error() string {
-	return "authentication required - run 'notion config auth'"
+	return "authentication required - run 'notion-cli auth login'"
 }
 
 func IsAuthRequired(err error) bool {
@@ -318,20 +318,34 @@ func (c *Client) ResolveDataSourceID(ctx context.Context, id string) (string, er
 
 type UpdatePageRequest struct {
 	PageID  string
-	Command string // "replace_content", "replace_content_range", "insert_content_after", "update_properties"
+	Command string // "replace_content", "update_content", "update_properties", "apply_template", "update_verification"
 
 	// For replace_content
 	NewContent string
 
-	// For replace_content_range and insert_content_after
-	Selection string
-	NewStr    string
+	// For update_content
+	ContentUpdates []ContentUpdate
 
 	// For update_properties
 	Properties map[string]any
 }
 
+type ContentUpdate struct {
+	OldStr string
+	NewStr string
+}
+
 func (c *Client) UpdatePage(ctx context.Context, req UpdatePageRequest) error {
+	data := buildUpdatePageToolArgs(req)
+
+	result, err := c.CallTool(ctx, "notion-update-page", data)
+	if err != nil {
+		return err
+	}
+	return checkToolError(result)
+}
+
+func buildUpdatePageToolArgs(req UpdatePageRequest) map[string]any {
 	data := map[string]any{
 		"page_id": req.PageID,
 		"command": req.Command,
@@ -340,18 +354,20 @@ func (c *Client) UpdatePage(ctx context.Context, req UpdatePageRequest) error {
 	switch req.Command {
 	case "replace_content":
 		data["new_str"] = req.NewContent
-	case "replace_content_range", "insert_content_after":
-		data["selection_with_ellipsis"] = req.Selection
-		data["new_str"] = req.NewStr
+	case "update_content":
+		updates := make([]any, 0, len(req.ContentUpdates))
+		for _, u := range req.ContentUpdates {
+			updates = append(updates, map[string]any{
+				"old_str": u.OldStr,
+				"new_str": u.NewStr,
+			})
+		}
+		data["content_updates"] = updates
 	case "update_properties":
 		data["properties"] = req.Properties
 	}
 
-	result, err := c.CallTool(ctx, "notion-update-page", data)
-	if err != nil {
-		return err
-	}
-	return checkToolError(result)
+	return data
 }
 
 type GetCommentsRequest struct {

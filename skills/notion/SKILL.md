@@ -13,7 +13,7 @@ A CLI to manage Notion from the command line, using Notion's remote MCP server.
 The `notion-cli` command must be available on PATH. To check:
 
 ```bash
-notion-cli --version
+notion-cli version
 ```
 
 If not installed:
@@ -31,6 +31,7 @@ The CLI uses OAuth authentication. On first use, it opens a browser for authoriz
 ```bash
 notion-cli auth login      # Authenticate with Notion
 notion-cli auth status     # Check authentication status
+notion-cli auth refresh    # Refresh token if status shows expired token
 notion-cli auth logout     # Clear credentials
 ```
 
@@ -100,6 +101,16 @@ notion-cli page edit <page> --find "old text" --replace-with "new text"
 notion-cli page edit <page> --find "section" --append "additional content"
 ```
 
+### Edit mode guardrails
+
+`page edit` supports these mutually exclusive modes:
+
+1. `--replace "..."` for full-page replacement.
+2. `--find "..." --replace-with "..."` for targeted replacement.
+3. `--find "..." --append "..."` for append-after-match.
+
+When a targeted edit fails (for example MCP validation errors), fall back to full replacement by fetching content, editing locally, then applying `--replace`.
+
 ### Databases
 
 All database commands accept a **URL**, **name**, or **ID** to identify databases.
@@ -152,3 +163,5 @@ notion-cli search "api" --json | jq '.[] | .title'
 5. **Check --help** - Every command has detailed help: `notion-cli page edit --help`
 6. **Raw output** - Use `--raw` with `page view` to see the original Notion markup
 7. **JSON for parsing** - Use `--json` when you need to extract specific fields
+8. **Auth preflight** - Run `notion-cli auth status --json` before a multi-step workflow and refresh/login if needed
+9. **Error handling** - If a targeted `page edit` call fails, rerun with `--replace` as a safe fallback
