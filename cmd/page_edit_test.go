@@ -44,25 +44,21 @@ func TestBuildPageEditRequestFindReplaceUsesUpdateContent(t *testing.T) {
 	}
 }
 
-func TestBuildPageEditRequestFindAppendUsesUpdateContent(t *testing.T) {
+func TestBuildPageEditRequestFindAppendUsesInsertContentAfter(t *testing.T) {
 	req, err := buildPageEditRequest("", "## Section", "", "\nExtra details")
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	if req.Command != "update_content" {
-		t.Fatalf("expected update_content command, got %q", req.Command)
+	if req.Command != "insert_content_after" {
+		t.Fatalf("expected insert_content_after command, got %q", req.Command)
 	}
 
-	if len(req.ContentUpdates) != 1 {
-		t.Fatalf("expected one content update, got %d", len(req.ContentUpdates))
+	if req.Selection != "## Section" {
+		t.Fatalf("unexpected selection: %q", req.Selection)
 	}
-
-	if req.ContentUpdates[0].OldStr != "## Section" {
-		t.Fatalf("unexpected old string: %q", req.ContentUpdates[0].OldStr)
-	}
-	if req.ContentUpdates[0].NewStr != "## Section\nExtra details" {
-		t.Fatalf("unexpected new string: %q", req.ContentUpdates[0].NewStr)
+	if req.NewStr != "\nExtra details" {
+		t.Fatalf("unexpected new string: %q", req.NewStr)
 	}
 }
 

@@ -65,3 +65,24 @@ func TestBuildUpdatePageToolArgsUpdateProperties(t *testing.T) {
 		t.Fatalf("unexpected args\nwant: %#v\ngot:  %#v", want, got)
 	}
 }
+
+func TestBuildUpdatePageToolArgsInsertContentAfter(t *testing.T) {
+	req := UpdatePageRequest{
+		PageID:    "page-123",
+		Command:   "insert_content_after",
+		Selection: "start...end",
+		NewStr:    "extra",
+	}
+
+	got := buildUpdatePageToolArgs(req)
+	want := map[string]any{
+		"page_id":                 "page-123",
+		"command":                 "insert_content_after",
+		"selection_with_ellipsis": "start...end",
+		"new_str":                 "extra",
+	}
+
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("unexpected args\nwant: %#v\ngot:  %#v", want, got)
+	}
+}

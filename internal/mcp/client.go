@@ -318,13 +318,17 @@ func (c *Client) ResolveDataSourceID(ctx context.Context, id string) (string, er
 
 type UpdatePageRequest struct {
 	PageID  string
-	Command string // "replace_content", "update_content", "update_properties", "apply_template", "update_verification"
+	Command string // "replace_content", "update_content", "insert_content_after", "update_properties", "apply_template", "update_verification"
 
 	// For replace_content
 	NewContent string
 
 	// For update_content
 	ContentUpdates []ContentUpdate
+
+	// For insert_content_after
+	Selection string
+	NewStr    string
 
 	// For update_properties
 	Properties map[string]any
@@ -363,6 +367,9 @@ func buildUpdatePageToolArgs(req UpdatePageRequest) map[string]any {
 			})
 		}
 		data["content_updates"] = updates
+	case "insert_content_after":
+		data["selection_with_ellipsis"] = req.Selection
+		data["new_str"] = req.NewStr
 	case "update_properties":
 		data["properties"] = req.Properties
 	}

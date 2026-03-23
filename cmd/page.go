@@ -406,15 +406,18 @@ func buildPageEditRequest(replace, find, replaceWith, appendText string) (mcp.Up
 		return mcp.UpdatePageRequest{}, &output.UserError{Message: "with --find, specify exactly one of --replace-with or --append"}
 	}
 
-	newStr := replaceWith
 	if hasAppend {
-		newStr = find + appendText
+		return mcp.UpdatePageRequest{
+			Command:   "insert_content_after",
+			Selection: find,
+			NewStr:    appendText,
+		}, nil
 	}
 
 	return mcp.UpdatePageRequest{
 		Command: "update_content",
 		ContentUpdates: []mcp.ContentUpdate{
-			{OldStr: find, NewStr: newStr},
+			{OldStr: find, NewStr: replaceWith},
 		},
 	}, nil
 }
