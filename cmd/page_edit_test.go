@@ -1,8 +1,12 @@
 package cmd
 
 import (
+	"context"
+	"errors"
+	"strings"
 	"testing"
 
+	"github.com/lox/notion-cli/internal/cli"
 	"github.com/lox/notion-cli/internal/mcp"
 )
 
@@ -105,6 +109,71 @@ func TestBuildPageEditRequestInvalidCombinations(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if _, err := buildPageEditRequest(tt.replace, tt.find, tt.replaceWith, tt.appendText); err == nil {
 				t.Fatalf("expected error")
+			}
+		})
+	}
+}
+
+func TestResolveFetchIDUsesCanonicalIDForKnownRefKinds(t *testing.T) {
+	resolver := func(_ context.Context, _ *mcp.Client, _ string) (string, error) {
+		return "resolved-by-name", nil
+	}
+
+	tests := []struct {
+		name     string
+		page     string
+		ref      cli.PageRef
+		wantID   string
+		wantErr  bool
+		errMatch string
+		resolver pageIDResolver
+	}{
+		{
+			name:   "canonical id for ref id",
+			page:   "https://www.notion.so/workspace/Page-12345678abcdef1234567890abcdef12",
+			ref:    cli.PageRef{Kind: cli.RefID, ID: "12345678-abcd-ef12-3456-7890abcdef12"},
+			wantID: "12345678-abcd-ef12-3456-7890abcdef12",
+			resolver: func(_ context.Context, _ *mcp.Client, _ string) (string, error) {
+				return "", errors.New("resolver should not be called")
+			},
+		},
+		{
+			name:   "url ref keeps original for fetch",
+			page:   "https://example.com/page",
+			ref:    cli.PageRef{Kind: cli.RefURL},
+			wantID: "https://example.com/page",
+			resolver: func(_ context.Context, _ *mcp.Client, _ string) (string, error) {
+				return "", errors.New("resolver should not be called")
+			},
+		},
+		{
+			name:     "name ref resolves via resolver",
+			page:     "Meeting Notes",
+			ref:      cli.PageRef{Kind: cli.RefName},
+			wantID:   "resolved-by-name",
+			resolver: resolver,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := resolveFetchID(context.Background(), tt.page, tt.ref, nil, tt.resolver)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected error")
+				}
+				if tt.errMatch != "" && !strings.Contains(err.Error(), tt.errMatch) {
+					t.Fatalf("expected error to contain %q, got %q", tt.errMatch, err.Error())
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("expected no error, got %v", err)
+			}
+
+			if got != tt.wantID {
+				t.Fatalf("resolveFetchID() = %q, want %q", got, tt.wantID)
 			}
 		})
 	}

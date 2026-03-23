@@ -95,14 +95,10 @@ func runPageView(ctx *Context, page string, raw bool) error {
 	bgCtx := context.Background()
 
 	ref := cli.ParsePageRef(page)
-	fetchID := page
-	if ref.Kind == cli.RefName {
-		resolved, err := cli.ResolvePageID(bgCtx, client, page)
-		if err != nil {
-			output.PrintError(err)
-			return err
-		}
-		fetchID = resolved
+	fetchID, err := resolveFetchID(bgCtx, page, ref, client, cli.ResolvePageID)
+	if err != nil {
+		output.PrintError(err)
+		return err
 	}
 
 	result, err := client.Fetch(bgCtx, fetchID)
@@ -131,6 +127,22 @@ func runPageView(ctx *Context, page string, raw bool) error {
 	}
 
 	return output.RenderPage(result.Content)
+}
+
+type pageIDResolver func(context.Context, *mcp.Client, string) (string, error)
+
+func resolveFetchID(ctx context.Context, page string, ref cli.PageRef, client *mcp.Client, resolve pageIDResolver) (string, error) {
+	switch ref.Kind {
+	case cli.RefID:
+		return ref.ID, nil
+	case cli.RefName:
+		if resolve == nil {
+			return "", fmt.Errorf("resolver not configured for page name input")
+		}
+		return resolve(ctx, client, page)
+	default:
+		return page, nil
+	}
 }
 
 type PageCreateCmd struct {

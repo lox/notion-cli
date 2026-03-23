@@ -11,11 +11,9 @@ import (
 var version = "dev"
 
 func main() {
-	for _, arg := range os.Args[1:] {
-		if arg == "--version" || arg == "-v" {
-			println("notion-cli version " + version)
-			os.Exit(0)
-		}
+	if shouldPrintVersionAndExit(os.Args[1:]) {
+		println("notion-cli version " + version)
+		os.Exit(0)
 	}
 
 	c := &cmd.CLI{}
@@ -29,4 +27,12 @@ func main() {
 	err := ctx.Run(&cmd.Context{Token: c.Token})
 	ctx.FatalIfErrorf(err)
 	os.Exit(0)
+}
+
+func shouldPrintVersionAndExit(args []string) bool {
+	if len(args) != 1 {
+		return false
+	}
+
+	return args[0] == "--version" || args[0] == "-v"
 }
