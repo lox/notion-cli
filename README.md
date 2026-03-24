@@ -130,6 +130,8 @@ notion-cli comment create <page-id> --content "Comment text"
 ### Other
 
 ```bash
+notion-cli tools                               # List available MCP tools
+notion-cli tools --json                        # Output tools as JSON
 notion-cli version                             # Show version
 notion-cli --version                           # Alias for version
 notion-cli -v                                  # Short alias for version
