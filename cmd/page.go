@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -328,18 +329,20 @@ func extractEmojiFromTitle(title string) (icon, cleanTitle string) {
 }
 
 type PageEditCmd struct {
-	Page        string `arg:"" help:"Page URL, name, or ID"`
-	Replace     string `help:"Replace entire content with this text"`
-	Find        string `help:"Text to find (use ... for ellipsis)"`
-	ReplaceWith string `help:"Text to replace with (requires --find)" name:"replace-with"`
-	Append      string `help:"Append text after selection (requires --find)"`
+	Page                 string   `arg:"" help:"Page URL, name, or ID"`
+	Replace              string   `help:"Replace entire content with this text"`
+	Find                 string   `help:"Text to find (use ... for ellipsis)"`
+	ReplaceWith          string   `help:"Text to replace with (requires --find)" name:"replace-with"`
+	Append               string   `help:"Append text after selection (requires --find)"`
+	Prop                 []string `help:"Set page properties (key=value, repeatable)" short:"P"`
+	AllowDeletingContent bool     `help:"Allow deleting child pages/databases when replacing content" name:"allow-deleting-content"`
 }
 
 func (c *PageEditCmd) Run(ctx *Context) error {
-	return runPageEdit(ctx, c.Page, c.Replace, c.Find, c.ReplaceWith, c.Append)
+	return runPageEdit(ctx, c.Page, c.Replace, c.Find, c.ReplaceWith, c.Append, c.Prop, c.AllowDeletingContent)
 }
 
-func runPageEdit(ctx *Context, page, replace, find, replaceWith, appendText string) error {
+func runPageEdit(ctx *Context, page, replace, find, replaceWith, appendText string, props []string, allowDeletingContent bool) error {
 	client, err := cli.RequireClient()
 	if err != nil {
 		return err
@@ -362,7 +365,7 @@ func runPageEdit(ctx *Context, page, replace, find, replaceWith, appendText stri
 		pageID = ref.ID
 	}
 
-	req, err := buildPageEditRequest(replace, find, replaceWith, appendText)
+	req, err := buildPageEditRequest(replace, find, replaceWith, appendText, props, allowDeletingContent)
 	if err != nil {
 		output.PrintError(err)
 		return err
@@ -378,9 +381,32 @@ func runPageEdit(ctx *Context, page, replace, find, replaceWith, appendText stri
 	return nil
 }
 
-func buildPageEditRequest(replace, find, replaceWith, appendText string) (mcp.UpdatePageRequest, error) {
+func buildPageEditRequest(replace, find, replaceWith, appendText string, props []string, allowDeletingContent bool) (mcp.UpdatePageRequest, error) {
+	if allowDeletingContent && replace == "" {
+		return mcp.UpdatePageRequest{}, &output.UserError{Message: "--allow-deleting-content requires --replace"}
+	}
+
+	if len(props) > 0 {
+		if allowDeletingContent {
+			return mcp.UpdatePageRequest{}, &output.UserError{Message: "--allow-deleting-content requires --replace"}
+		}
+		if replace != "" || find != "" || replaceWith != "" || appendText != "" {
+			return mcp.UpdatePageRequest{}, &output.UserError{Message: "--prop cannot be combined with --replace, --find, --replace-with, or --append"}
+		}
+
+		properties, err := parsePageEditProperties(props)
+		if err != nil {
+			return mcp.UpdatePageRequest{}, err
+		}
+
+		return mcp.UpdatePageRequest{
+			Command:    "update_properties",
+			Properties: properties,
+		}, nil
+	}
+
 	if replace == "" && find == "" && replaceWith == "" && appendText == "" {
-		return mcp.UpdatePageRequest{}, &output.UserError{Message: "specify --replace, or --find with --replace-with or --append"}
+		return mcp.UpdatePageRequest{}, &output.UserError{Message: "specify --replace, --prop, or --find with --replace-with or --append"}
 	}
 
 	if replace != "" {
@@ -388,8 +414,9 @@ func buildPageEditRequest(replace, find, replaceWith, appendText string) (mcp.Up
 			return mcp.UpdatePageRequest{}, &output.UserError{Message: "--replace cannot be combined with --find, --replace-with, or --append"}
 		}
 		return mcp.UpdatePageRequest{
-			Command:    "replace_content",
-			NewContent: replace,
+			Command:              "replace_content",
+			NewContent:           replace,
+			AllowDeletingContent: allowDeletingContent,
 		}, nil
 	}
 
@@ -397,7 +424,7 @@ func buildPageEditRequest(replace, find, replaceWith, appendText string) (mcp.Up
 		if replaceWith != "" || appendText != "" {
 			return mcp.UpdatePageRequest{}, &output.UserError{Message: "--replace-with and --append require --find"}
 		}
-		return mcp.UpdatePageRequest{}, &output.UserError{Message: "specify --replace, or --find with --replace-with or --append"}
+		return mcp.UpdatePageRequest{}, &output.UserError{Message: "specify --replace, --prop, or --find with --replace-with or --append"}
 	}
 
 	hasReplace := replaceWith != ""
@@ -420,6 +447,27 @@ func buildPageEditRequest(replace, find, replaceWith, appendText string) (mcp.Up
 			{OldStr: find, NewStr: replaceWith},
 		},
 	}, nil
+}
+
+func parsePageEditProperties(props []string) (map[string]any, error) {
+	properties := make(map[string]any, len(props))
+	for _, p := range props {
+		k, v, ok := strings.Cut(p, "=")
+		if !ok || strings.TrimSpace(k) == "" {
+			return nil, &output.UserError{Message: "invalid property format (expected key=value): " + p}
+		}
+
+		k = strings.TrimSpace(k)
+		var parsed any
+		if err := json.Unmarshal([]byte(v), &parsed); err == nil {
+			properties[k] = parsed
+			continue
+		}
+
+		properties[k] = v
+	}
+
+	return properties, nil
 }
 
 type PageSyncCmd struct {

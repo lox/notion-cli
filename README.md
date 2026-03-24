@@ -85,8 +85,10 @@ notion-cli page sync ./document.md --parent-db <db-id>      # Sync as database e
 
 # Edit an existing page
 notion-cli page edit <url> --replace "New content"                      # Replace all content
+notion-cli page edit <url> --replace "New content" --allow-deleting-content # Allow replacing pages with child content
 notion-cli page edit <url> --find "old text" --replace-with "new text"  # Find and replace
 notion-cli page edit <url> --find "section" --append "extra content"    # Append after match
+notion-cli page edit <url> -P "Status=Done" -P "Priority=1"             # Update page properties
 ```
 
 ### Search

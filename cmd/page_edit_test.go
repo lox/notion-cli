@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -11,7 +12,7 @@ import (
 )
 
 func TestBuildPageEditRequestReplace(t *testing.T) {
-	req, err := buildPageEditRequest("new content", "", "", "")
+	req, err := buildPageEditRequest("new content", "", "", "", nil, false)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -25,8 +26,23 @@ func TestBuildPageEditRequestReplace(t *testing.T) {
 	}
 }
 
+func TestBuildPageEditRequestReplaceAllowsDeletingContent(t *testing.T) {
+	req, err := buildPageEditRequest("new content", "", "", "", nil, true)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if req.Command != "replace_content" {
+		t.Fatalf("expected replace_content command, got %q", req.Command)
+	}
+
+	if !req.AllowDeletingContent {
+		t.Fatalf("expected allow deleting content to be set")
+	}
+}
+
 func TestBuildPageEditRequestFindReplaceUsesUpdateContent(t *testing.T) {
-	req, err := buildPageEditRequest("", "old text", "new text", "")
+	req, err := buildPageEditRequest("", "old text", "new text", "", nil, false)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -44,8 +60,32 @@ func TestBuildPageEditRequestFindReplaceUsesUpdateContent(t *testing.T) {
 	}
 }
 
+func TestBuildPageEditRequestPropsUsesUpdateProperties(t *testing.T) {
+	req, err := buildPageEditRequest("", "", "", "", []string{
+		"Status=Done",
+		"Priority=1",
+		"Metadata={\"owner\":\"person@example.com\"}",
+	}, false)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if req.Command != "update_properties" {
+		t.Fatalf("expected update_properties command, got %q", req.Command)
+	}
+
+	want := map[string]any{
+		"Status":   "Done",
+		"Priority": float64(1),
+		"Metadata": map[string]any{"owner": "person@example.com"},
+	}
+	if !reflect.DeepEqual(req.Properties, want) {
+		t.Fatalf("unexpected properties\nwant: %#v\ngot:  %#v", want, req.Properties)
+	}
+}
+
 func TestBuildPageEditRequestFindAppendUsesInsertContentAfter(t *testing.T) {
-	req, err := buildPageEditRequest("", "## Section", "", "\nExtra details")
+	req, err := buildPageEditRequest("", "## Section", "", "\nExtra details", nil, false)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -69,6 +109,8 @@ func TestBuildPageEditRequestInvalidCombinations(t *testing.T) {
 		find        string
 		replaceWith string
 		appendText  string
+		props       []string
+		allowDelete bool
 	}{
 		{
 			name:        "replace cannot be combined",
@@ -88,6 +130,12 @@ func TestBuildPageEditRequestInvalidCombinations(t *testing.T) {
 			name: "requires an action",
 		},
 		{
+			name:        "allow deleting content requires replace",
+			find:        "old",
+			appendText:  "extra",
+			allowDelete: true,
+		},
+		{
 			name:        "find requires either replace-with or append",
 			find:        "old",
 			replaceWith: "",
@@ -99,11 +147,20 @@ func TestBuildPageEditRequestInvalidCombinations(t *testing.T) {
 			replaceWith: "new",
 			appendText:  "extra",
 		},
+		{
+			name:    "prop cannot be combined",
+			replace: "all",
+			props:   []string{"Status=Done"},
+		},
+		{
+			name:  "invalid prop format",
+			props: []string{"Status"},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if _, err := buildPageEditRequest(tt.replace, tt.find, tt.replaceWith, tt.appendText); err == nil {
+			if _, err := buildPageEditRequest(tt.replace, tt.find, tt.replaceWith, tt.appendText, tt.props, tt.allowDelete); err == nil {
 				t.Fatalf("expected error")
 			}
 		})

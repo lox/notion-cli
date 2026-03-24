@@ -321,7 +321,8 @@ type UpdatePageRequest struct {
 	Command string // "replace_content", "update_content", "insert_content_after", "update_properties", "apply_template", "update_verification"
 
 	// For replace_content
-	NewContent string
+	NewContent           string
+	AllowDeletingContent bool
 
 	// For update_content
 	ContentUpdates []ContentUpdate
@@ -353,6 +354,9 @@ func buildUpdatePageToolArgs(req UpdatePageRequest) map[string]any {
 	data := map[string]any{
 		"page_id": req.PageID,
 		"command": req.Command,
+	}
+	if req.AllowDeletingContent {
+		data["allow_deleting_content"] = true
 	}
 
 	switch req.Command {

@@ -24,6 +24,27 @@ func TestBuildUpdatePageToolArgsReplaceContent(t *testing.T) {
 	}
 }
 
+func TestBuildUpdatePageToolArgsReplaceContentAllowDeletingContent(t *testing.T) {
+	req := UpdatePageRequest{
+		PageID:               "page-123",
+		Command:              "replace_content",
+		NewContent:           "hello",
+		AllowDeletingContent: true,
+	}
+
+	got := buildUpdatePageToolArgs(req)
+	want := map[string]any{
+		"page_id":                "page-123",
+		"command":                "replace_content",
+		"new_str":                "hello",
+		"allow_deleting_content": true,
+	}
+
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("unexpected args\nwant: %#v\ngot:  %#v", want, got)
+	}
+}
+
 func TestBuildUpdatePageToolArgsUpdateContent(t *testing.T) {
 	req := UpdatePageRequest{
 		PageID:  "page-123",
