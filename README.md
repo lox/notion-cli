@@ -34,8 +34,11 @@ notion-cli auth login
 # Search your workspace
 notion-cli search "meeting notes"
 
-# View a page
+# View a page with open comments inline by default
 notion-cli page view "https://notion.so/My-Page-abc123"
+
+# Hide page and block comments when you only want the body
+notion-cli page view "Meeting Notes" --no-comments
 
 # List your pages
 notion-cli page list
@@ -62,10 +65,10 @@ notion-cli page list                           # List pages
 notion-cli page list --limit 50                # Limit results
 notion-cli page list --json                    # Output as JSON
 
-notion-cli page view <url>                     # View page content with comments
-notion-cli page view <url> --no-comments       # Hide page and block comments
-notion-cli page view <url> --raw               # View raw Notion markup
-notion-cli page view <url> --json              # Output as JSON
+notion-cli page view <page>                    # View page content with comments
+notion-cli page view <page> --no-comments      # Hide page and block comments
+notion-cli page view <page> --raw              # View raw Notion markup
+notion-cli page view <page> --json             # Output as JSON
 
 notion-cli page create --title "Title"         # Create a page
 notion-cli page create --title "T" --content "Body text"
@@ -85,12 +88,16 @@ notion-cli page sync ./document.md --parent "Engineering"   # Set parent on firs
 notion-cli page sync ./document.md --parent-db <db-id>      # Sync as database entry
 
 # Edit an existing page
-notion-cli page edit <url> --replace "New content"                      # Replace all content
-notion-cli page edit <url> --replace "New content" --allow-deleting-content # Allow replacing pages with child content
-notion-cli page edit <url> --find "old text" --replace-with "new text"  # Find and replace
-notion-cli page edit <url> --find "section" --append "extra content"    # Append after match
-notion-cli page edit <url> -P "Status=Done" -P "Priority=1"             # Update page properties
+notion-cli page edit <page> --replace "New content"                      # Replace all content
+notion-cli page edit <page> --replace "New content" --allow-deleting-content # Allow replacing pages with child content
+notion-cli page edit <page> --find "old text" --replace-with "new text"  # Find and replace
+notion-cli page edit <page> --find "section" --append "extra content"    # Append after match
+notion-cli page edit <page> -P "Status=Done" -P "Priority=1"             # Update page properties
 ```
+
+The `<page>` argument accepts a URL, ID, or page name.
+
+`page view` shows open page-level comments and inline block discussions by default. Inline discussions are rendered in context, with the anchor text wrapped in `[[...]]` and the discussion shown immediately below it. Use `--no-comments` to suppress comments, `--raw` to inspect the original Notion markup, and `--json` to return the page plus a `Comments` array.
 
 ### Search
 
@@ -127,9 +134,13 @@ The `<database>` argument accepts a URL, ID, or name. Date properties use the ex
 notion-cli comment list <page>                 # List open page and block comments
 notion-cli comment list <page> --resolved      # Include resolved discussions too
 notion-cli comment list <page> --json          # Output as JSON
+notion-cli comment list "Meeting Notes"        # Resolve the page by name
 
 notion-cli comment create <page> --content "Comment text"
+notion-cli comment create https://notion.so/... --content "Looks good"
 ```
+
+The comment commands accept a page URL, ID, or name. `comment list` includes both page-level and block-level discussions by default and only shows open discussions unless you pass `--resolved`.
 
 ### Other
 

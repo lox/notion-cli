@@ -102,6 +102,8 @@ notion-cli page edit <page> --find "old text" --replace-with "new text"
 notion-cli page edit <page> --find "section" --append "additional content"
 ```
 
+`page view` shows open page-level comments and inline block discussions by default. Inline discussions are rendered beside their anchor text, with the anchor wrapped in `[[...]]` and the discussion shown immediately below it. Use `--no-comments` when you only want the page body, `--raw` to inspect the original Notion markup, and `--json` when an agent needs the page plus the `Comments` array.
+
 ### Edit mode guardrails
 
 `page edit` supports these mutually exclusive modes:
@@ -143,9 +145,13 @@ notion-cli db create <database> -t "Title" --json
 notion-cli comment list <page>              # List open page and block comments
 notion-cli comment list <page> --resolved   # Include resolved discussions too
 notion-cli comment list <page> --json
+notion-cli comment list "Meeting Notes"     # Resolve a page by name
 
 notion-cli comment create <page> --content "Great work!"
+notion-cli comment create https://notion.so/... --content "Looks good"
 ```
+
+The comment commands accept a page URL, ID, or name. `comment list` includes both page-level and block-level discussions by default and only shows open discussions unless `--resolved` is passed.
 
 ## Output Formats
 
@@ -159,11 +165,12 @@ notion-cli search "api" --json | jq '.[] | .title'
 ## Tips for Agents
 
 1. **Search first** - Use `notion-cli search` to find pages before operating on them
-2. **Use URLs or IDs** - Both work for page/database references
+2. **Use URLs, names, or IDs** - All page commands and comment commands resolve pages from any of these forms
 3. **Explicit parent types** - Use `--parent` for page parents, `--parent-db` for database parents on `page sync`/`page upload`
 4. **Query databases first** - Use `notion-cli db query <id>` to see the schema and property types before creating entries
 5. **Check --help** - Every command has detailed help: `notion-cli page edit --help`
-6. **Raw output** - Use `--raw` with `page view` to see the original Notion markup
-7. **JSON for parsing** - Use `--json` when you need to extract specific fields
-8. **Auth preflight** - Run `notion-cli auth status --json` before a multi-step workflow and refresh/login if needed
-9. **Error handling** - If a targeted `page edit` call fails, rerun with `--replace` as a safe fallback
+6. **Inline comments by default** - `page view` includes open page comments and inline block discussions unless `--no-comments` is set
+7. **Raw output** - Use `--raw` with `page view` to see the original Notion markup
+8. **JSON for parsing** - Use `--json` when you need to extract specific fields, including the `Comments` array from `page view`
+9. **Auth preflight** - Run `notion-cli auth status --json` before a multi-step workflow and refresh/login if needed
+10. **Error handling** - If a targeted `page edit` call fails, rerun with `--replace` as a safe fallback
