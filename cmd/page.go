@@ -22,6 +22,10 @@ type PageCmd struct {
 	Edit   PageEditCmd   `cmd:"" help:"Edit a page"`
 }
 
+var loadPageViewCommentsFn = loadPageViewComments
+var printViewedPageFn = output.PrintViewedPage
+var printWarningFn = output.PrintWarning
+
 type PageListCmd struct {
 	Query string `help:"Filter pages by name" short:"q"`
 	Limit int    `help:"Maximum number of results" short:"l" default:"20"`
@@ -109,10 +113,16 @@ func runPageView(ctx *Context, page string, raw, includeComments bool) error {
 		return err
 	}
 
-	comments, err := loadPageViewComments(bgCtx, client, fetchID, result.Content, raw, includeComments, ctx.JSON)
+	return renderFetchedPageView(bgCtx, ctx, client, fetchID, result, raw, includeComments)
+}
+
+func renderFetchedPageView(bgCtx context.Context, ctx *Context, client *mcp.Client, fetchID string, result *mcp.FetchResult, raw, includeComments bool) error {
+	comments, err := loadPageViewCommentsFn(bgCtx, client, fetchID, result.Content, raw, includeComments, ctx.JSON)
 	if err != nil {
-		output.PrintError(err)
-		return err
+		if !ctx.JSON {
+			printWarningFn("Unable to load comments: " + err.Error())
+		}
+		comments = nil
 	}
 
 	pageOutput := output.Page{
@@ -123,7 +133,7 @@ func runPageView(ctx *Context, page string, raw, includeComments bool) error {
 	}
 
 	if ctx.JSON {
-		return output.PrintViewedPage(pageOutput, comments, true)
+		return printViewedPageFn(pageOutput, comments, true)
 	}
 
 	if raw {
@@ -132,14 +142,14 @@ func runPageView(ctx *Context, page string, raw, includeComments bool) error {
 	}
 
 	if result.Content == "" {
-		output.PrintWarning("No content found")
+		printWarningFn("No content found")
 		if len(comments) == 0 {
 			return nil
 		}
 		fmt.Println()
 	}
 
-	return output.PrintViewedPage(pageOutput, comments, false)
+	return printViewedPageFn(pageOutput, comments, false)
 }
 
 func loadPageViewComments(ctx context.Context, client *mcp.Client, pageID, pageContent string, raw, includeComments, asJSON bool) ([]output.Comment, error) {
