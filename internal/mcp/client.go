@@ -169,12 +169,7 @@ type SearchOptions struct {
 }
 
 func (c *Client) Search(ctx context.Context, query string, opts *SearchOptions) (*SearchResponse, error) {
-	args := map[string]any{
-		"query": query,
-	}
-	if opts != nil && opts.ContentSearchMode != "" {
-		args["content_search_mode"] = opts.ContentSearchMode
-	}
+	args := buildSearchToolArgs(query, opts)
 	result, err := c.CallTool(ctx, "notion-search", args)
 	if err != nil {
 		return nil, err
@@ -190,6 +185,17 @@ func (c *Client) Search(ctx context.Context, query string, opts *SearchOptions) 
 	}
 
 	return &resp, nil
+}
+
+func buildSearchToolArgs(query string, opts *SearchOptions) map[string]any {
+	args := map[string]any{}
+	if strings.TrimSpace(query) != "" {
+		args["query"] = query
+	}
+	if opts != nil && opts.ContentSearchMode != "" {
+		args["content_search_mode"] = opts.ContentSearchMode
+	}
+	return args
 }
 
 type FetchResult struct {

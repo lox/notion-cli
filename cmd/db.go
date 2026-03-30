@@ -36,12 +36,7 @@ func runDBList(ctx *Context, query string, limit int) error {
 
 	bgCtx := context.Background()
 
-	searchQuery := query
-	if searchQuery == "" {
-		searchQuery = "*"
-	}
-
-	resp, err := client.Search(bgCtx, searchQuery, &mcp.SearchOptions{ContentSearchMode: "workspace_search"})
+	resp, err := client.Search(bgCtx, query, &mcp.SearchOptions{ContentSearchMode: "workspace_search"})
 	if err != nil {
 		output.PrintError(err)
 		return err
