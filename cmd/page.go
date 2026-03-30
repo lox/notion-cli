@@ -162,12 +162,12 @@ func loadPageViewComments(ctx context.Context, client *mcp.Client, pageID, pageC
 		return nil, nil
 	}
 
-	resp, err := client.GetComments(ctx, buildCommentListRequest(pageID, false))
+	mcpComments, err := loadAllComments(ctx, client, buildCommentListRequest(pageID, false))
 	if err != nil {
 		return nil, err
 	}
 
-	comments := convertComments(resp.Comments)
+	comments := convertComments(mcpComments)
 	hydrateCommentContextsFromPageContent(pageContent, comments)
 	hydrateCommentAuthors(ctx, client, comments)
 	return comments, nil

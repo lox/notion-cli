@@ -45,6 +45,56 @@ func TestBuildCommentListRequest(t *testing.T) {
 	}
 }
 
+type stubCommentsGetter struct {
+	responses []*mcp.CommentsResponse
+	requests  []mcp.GetCommentsRequest
+}
+
+func (s *stubCommentsGetter) GetComments(_ context.Context, req mcp.GetCommentsRequest) (*mcp.CommentsResponse, error) {
+	s.requests = append(s.requests, req)
+	if len(s.responses) == 0 {
+		return nil, errors.New("unexpected GetComments call")
+	}
+	resp := s.responses[0]
+	s.responses = s.responses[1:]
+	return resp, nil
+}
+
+func TestLoadAllCommentsPaginates(t *testing.T) {
+	getter := &stubCommentsGetter{
+		responses: []*mcp.CommentsResponse{
+			{
+				Comments:   []mcp.Comment{{ID: "comment-1"}},
+				HasMore:    true,
+				NextCursor: "cursor-1",
+			},
+			{
+				Comments: []mcp.Comment{{ID: "comment-2"}},
+			},
+		},
+	}
+
+	comments, err := loadAllComments(context.Background(), getter, mcp.GetCommentsRequest{PageID: "page-123", IncludeAllBlocks: true})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(comments) != 2 {
+		t.Fatalf("expected 2 comments, got %d", len(comments))
+	}
+	if comments[0].ID != "comment-1" || comments[1].ID != "comment-2" {
+		t.Fatalf("unexpected comments: %#v", comments)
+	}
+	if len(getter.requests) != 2 {
+		t.Fatalf("expected 2 requests, got %d", len(getter.requests))
+	}
+	if getter.requests[0].Cursor != "" {
+		t.Fatalf("expected first request without cursor, got %q", getter.requests[0].Cursor)
+	}
+	if getter.requests[1].Cursor != "cursor-1" {
+		t.Fatalf("expected second request to use next cursor, got %q", getter.requests[1].Cursor)
+	}
+}
+
 func TestConvertCommentsIncludesContext(t *testing.T) {
 	comments := convertComments([]mcp.Comment{{
 		ID:           "comment-1",

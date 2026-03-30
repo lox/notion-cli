@@ -21,6 +21,10 @@ type CommentListCmd struct {
 	JSON     bool   `help:"Output as JSON" short:"j"`
 }
 
+type commentsGetter interface {
+	GetComments(context.Context, mcp.GetCommentsRequest) (*mcp.CommentsResponse, error)
+}
+
 func (c *CommentListCmd) Run(ctx *Context) error {
 	ctx.JSON = c.JSON
 	return runCommentList(ctx, c.Page, c.Resolved)
@@ -42,13 +46,13 @@ func runCommentList(ctx *Context, page string, includeResolved bool) error {
 
 	req := buildCommentListRequest(pageID, includeResolved)
 
-	resp, err := client.GetComments(bgCtx, req)
+	mcpComments, err := loadAllComments(bgCtx, client, req)
 	if err != nil {
 		output.PrintError(err)
 		return err
 	}
 
-	comments := convertComments(resp.Comments)
+	comments := convertComments(mcpComments)
 	if len(comments) > 0 {
 		if pageResult, err := client.FetchWithDiscussions(bgCtx, pageID); err == nil {
 			hydrateCommentContextsFromPageContent(pageResult.Content, comments)
@@ -63,6 +67,26 @@ func buildCommentListRequest(pageID string, includeResolved bool) mcp.GetComment
 		PageID:           pageID,
 		IncludeAllBlocks: true,
 		IncludeResolved:  includeResolved,
+	}
+}
+
+func loadAllComments(ctx context.Context, client commentsGetter, req mcp.GetCommentsRequest) ([]mcp.Comment, error) {
+	comments := make([]mcp.Comment, 0)
+	for {
+		resp, err := client.GetComments(ctx, req)
+		if err != nil {
+			return nil, err
+		}
+		if resp == nil {
+			return comments, nil
+		}
+
+		comments = append(comments, resp.Comments...)
+		if !resp.HasMore || resp.NextCursor == "" {
+			return comments, nil
+		}
+
+		req.Cursor = resp.NextCursor
 	}
 }
 
