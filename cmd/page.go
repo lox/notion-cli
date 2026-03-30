@@ -107,7 +107,12 @@ func runPageView(ctx *Context, page string, raw, includeComments bool) error {
 		return err
 	}
 
-	result, err := client.Fetch(bgCtx, fetchID)
+	fetchPage := client.Fetch
+	if includeComments {
+		fetchPage = client.FetchWithDiscussions
+	}
+
+	result, err := fetchPage(bgCtx, fetchID)
 	if err != nil {
 		output.PrintError(err)
 		return err

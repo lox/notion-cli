@@ -208,9 +208,15 @@ type fetchResponse struct {
 }
 
 func (c *Client) Fetch(ctx context.Context, id string) (*FetchResult, error) {
-	result, err := c.CallTool(ctx, "notion-fetch", map[string]any{
-		"id": id,
-	})
+	return c.fetch(ctx, id, false)
+}
+
+func (c *Client) FetchWithDiscussions(ctx context.Context, id string) (*FetchResult, error) {
+	return c.fetch(ctx, id, true)
+}
+
+func (c *Client) fetch(ctx context.Context, id string, includeDiscussions bool) (*FetchResult, error) {
+	result, err := c.CallTool(ctx, "notion-fetch", buildFetchToolArgs(id, includeDiscussions))
 	if err != nil {
 		return nil, err
 	}
@@ -226,6 +232,16 @@ func (c *Client) Fetch(ctx context.Context, id string) (*FetchResult, error) {
 	}
 
 	return &FetchResult{Content: text}, nil
+}
+
+func buildFetchToolArgs(id string, includeDiscussions bool) map[string]any {
+	args := map[string]any{
+		"id": id,
+	}
+	if includeDiscussions {
+		args["include_discussions"] = true
+	}
+	return args
 }
 
 type CreatePageRequest struct {

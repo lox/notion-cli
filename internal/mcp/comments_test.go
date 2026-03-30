@@ -31,6 +31,39 @@ func TestBuildGetCommentsToolArgs(t *testing.T) {
 	}
 }
 
+func TestBuildFetchToolArgs(t *testing.T) {
+	tests := []struct {
+		name               string
+		includeDiscussions bool
+		want               map[string]any
+	}{
+		{
+			name:               "basic fetch",
+			includeDiscussions: false,
+			want: map[string]any{
+				"id": "page-123",
+			},
+		},
+		{
+			name:               "fetch with discussion markers",
+			includeDiscussions: true,
+			want: map[string]any{
+				"id":                  "page-123",
+				"include_discussions": true,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := buildFetchToolArgs("page-123", tt.includeDiscussions)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("unexpected args\nwant: %#v\ngot:  %#v", tt.want, got)
+			}
+		})
+	}
+}
+
 func TestParseCommentsResponseXMLWrapper(t *testing.T) {
 	raw := `{"text":"<discussions total-count=\"1\" shown-count=\"1\"><discussion id=\"discussion://page/block/discussion\" comment-count=\"1\" resolved=\"false\" type=\"comment\" context=\"inline\"><comment id=\"comment-1\" url=\"https://example.com\" user-url=\"user://user-123\" datetime=\"2026-03-29T22:31:40.086Z\">Hello &amp; goodbye</comment></discussion></discussions>"}`
 

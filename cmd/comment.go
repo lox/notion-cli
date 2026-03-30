@@ -49,8 +49,10 @@ func runCommentList(ctx *Context, page string, includeResolved bool) error {
 	}
 
 	comments := convertComments(resp.Comments)
-	if pageResult, err := client.Fetch(bgCtx, pageID); err == nil {
-		hydrateCommentContextsFromPageContent(pageResult.Content, comments)
+	if len(comments) > 0 {
+		if pageResult, err := client.FetchWithDiscussions(bgCtx, pageID); err == nil {
+			hydrateCommentContextsFromPageContent(pageResult.Content, comments)
+		}
 	}
 	hydrateCommentAuthors(bgCtx, client, comments)
 	return output.PrintComments(comments, ctx.JSON)
