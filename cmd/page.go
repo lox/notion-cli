@@ -108,7 +108,7 @@ func runPageView(ctx *Context, page string, raw, includeComments bool) error {
 	}
 
 	fetchPage := client.Fetch
-	if includeComments {
+	if shouldLoadPageViewComments(raw, includeComments, ctx.JSON) {
 		fetchPage = client.FetchWithDiscussions
 	}
 
