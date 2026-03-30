@@ -586,13 +586,12 @@ func isValidXMLEntity(entity string) bool {
 		return true
 	}
 
-	for i := 0; i < len(entity); i++ {
-		if (entity[i] < 'A' || entity[i] > 'Z') && (entity[i] < 'a' || entity[i] > 'z') {
-			return false
-		}
+	switch entity {
+	case "amp", "lt", "gt", "quot", "apos":
+		return true
+	default:
+		return false
 	}
-
-	return true
 }
 
 func isHexDigit(b byte) bool {

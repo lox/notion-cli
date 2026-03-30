@@ -109,12 +109,7 @@ func runPageView(ctx *Context, page string, raw, includeComments bool) error {
 		return err
 	}
 
-	if raw {
-		fmt.Println(result.Content)
-		return nil
-	}
-
-	comments, err := loadPageViewComments(bgCtx, client, fetchID, result.Content, includeComments)
+	comments, err := loadPageViewComments(bgCtx, client, fetchID, result.Content, raw, includeComments, ctx.JSON)
 	if err != nil {
 		output.PrintError(err)
 		return err
@@ -131,6 +126,11 @@ func runPageView(ctx *Context, page string, raw, includeComments bool) error {
 		return output.PrintViewedPage(pageOutput, comments, true)
 	}
 
+	if raw {
+		fmt.Println(result.Content)
+		return nil
+	}
+
 	if result.Content == "" {
 		output.PrintWarning("No content found")
 		if len(comments) == 0 {
@@ -142,8 +142,8 @@ func runPageView(ctx *Context, page string, raw, includeComments bool) error {
 	return output.PrintViewedPage(pageOutput, comments, false)
 }
 
-func loadPageViewComments(ctx context.Context, client *mcp.Client, pageID, pageContent string, includeComments bool) ([]output.Comment, error) {
-	if !shouldLoadPageViewComments(false, includeComments) {
+func loadPageViewComments(ctx context.Context, client *mcp.Client, pageID, pageContent string, raw, includeComments, asJSON bool) ([]output.Comment, error) {
+	if !shouldLoadPageViewComments(raw, includeComments, asJSON) {
 		return nil, nil
 	}
 
@@ -158,8 +158,8 @@ func loadPageViewComments(ctx context.Context, client *mcp.Client, pageID, pageC
 	return comments, nil
 }
 
-func shouldLoadPageViewComments(raw, includeComments bool) bool {
-	return includeComments && !raw
+func shouldLoadPageViewComments(raw, includeComments, asJSON bool) bool {
+	return includeComments && (!raw || asJSON)
 }
 
 type pageIDResolver func(context.Context, *mcp.Client, string) (string, error)
