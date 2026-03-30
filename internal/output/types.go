@@ -37,8 +37,11 @@ type SearchResult struct {
 type Comment struct {
 	ID             string
 	DiscussionID   string
+	Context        string
+	Resolved       bool
 	CreatedTime    time.Time
 	LastEditedTime time.Time
 	CreatedBy      string
+	CreatedByName  string
 	Content        string
 }

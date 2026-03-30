@@ -3,6 +3,7 @@ package output
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"time"
 
@@ -76,6 +77,24 @@ func PrintPage(page Page, asJSON bool) error {
 	return nil
 }
 
+type pageViewJSON struct {
+	Page
+	Comments []Comment `json:"Comments,omitempty"`
+}
+
+func PrintViewedPage(page Page, comments []Comment, asJSON bool) error {
+	if asJSON {
+		return printPageViewJSON(os.Stdout, page, comments)
+	}
+	return RenderPageWithComments(page.Content, comments)
+}
+
+func printPageViewJSON(w io.Writer, page Page, comments []Comment) error {
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	return enc.Encode(pageViewJSON{Page: page, Comments: comments})
+}
+
 func PrintDatabases(dbs []Database, asJSON bool) error {
 	if asJSON {
 		return printJSON(dbs)
@@ -134,6 +153,7 @@ func PrintComments(comments []Comment, asJSON bool) error {
 	}
 
 	authorStyle := color.New(color.Bold)
+	contextStyle := color.New(color.Faint)
 	timeStyle := color.New(color.Faint)
 
 	for i, c := range comments {
@@ -141,13 +161,41 @@ func PrintComments(comments []Comment, asJSON bool) error {
 			fmt.Println()
 		}
 
-		_, _ = authorStyle.Print(c.CreatedBy)
-		fmt.Print(" ")
-		_, _ = timeStyle.Println(formatTime(c.CreatedTime))
+		if c.Context != "" {
+			_, _ = contextStyle.Printf("On: %s\n", c.Context)
+		}
+
+		_, _ = authorStyle.Print(commentAuthorName(c))
+		timeLabel := formatTime(c.CreatedTime)
+		statusLabel := commentStatusLabel(c)
+		switch {
+		case timeLabel != "" && statusLabel != "":
+			_, _ = timeStyle.Printf(" · %s · %s\n", timeLabel, statusLabel)
+		case timeLabel != "":
+			_, _ = timeStyle.Printf(" · %s\n", timeLabel)
+		case statusLabel != "":
+			_, _ = timeStyle.Printf(" · %s\n", statusLabel)
+		default:
+			fmt.Println()
+		}
 		fmt.Println(c.Content)
 	}
 
 	return nil
+}
+
+func commentAuthorName(c Comment) string {
+	if c.CreatedByName != "" {
+		return c.CreatedByName
+	}
+	return c.CreatedBy
+}
+
+func commentStatusLabel(c Comment) string {
+	if c.Resolved {
+		return "resolved"
+	}
+	return ""
 }
 
 func PrintError(err error) {

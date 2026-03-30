@@ -10,6 +10,11 @@ import (
 // notionToMarkdown converts Notion's XML-like content to Markdown.
 // It uses an HTML parser which is lenient with malformed markup.
 func notionToMarkdown(content string) string {
+	rendered, _ := notionToMarkdownWithComments(content, nil)
+	return rendered
+}
+
+func notionToMarkdownWithComments(content string, comments []Comment) (string, map[string]bool) {
 	// Preprocess: remove self-closing tags that HTML parser mishandles
 	// These become nested containers otherwise
 	content = regexp.MustCompile(`<empty-block\s*/>`).ReplaceAllString(content, "")
@@ -24,13 +29,15 @@ func notionToMarkdown(content string) string {
 
 	doc, err := html.Parse(strings.NewReader(wrapped))
 	if err != nil {
-		return content
+		return content, nil
 	}
 
 	var out strings.Builder
 	ctx := &renderContext{
-		out:     &out,
-		inQuote: false,
+		out:             &out,
+		inQuote:         false,
+		inlineComments:  buildInlineCommentIndex(comments),
+		usedDiscussions: make(map[string]bool),
 	}
 
 	// Find <root> element (will be under html > body) and process its children
@@ -56,12 +63,14 @@ func notionToMarkdown(content string) string {
 	// Clean up excess blank lines
 	result = regexp.MustCompile(`\n{3,}`).ReplaceAllString(result, "\n\n")
 
-	return strings.TrimSpace(result)
+	return strings.TrimSpace(result), ctx.usedDiscussions
 }
 
 type renderContext struct {
-	out     *strings.Builder
-	inQuote bool
+	out             *strings.Builder
+	inQuote         bool
+	inlineComments  map[string][]Comment
+	usedDiscussions map[string]bool
 }
 
 func (ctx *renderContext) renderNode(n *html.Node) {
@@ -124,8 +133,7 @@ func (ctx *renderContext) renderElement(n *html.Node) {
 	case "mention-page":
 		ctx.renderMentionPage(n)
 	case "span":
-		// Keep inner content, discard span wrapper
-		ctx.renderChildren(n)
+		ctx.renderSpan(n)
 	case "empty-block", "unknown", "omitted":
 		// Skip these elements entirely
 	case "p", "div":
@@ -176,6 +184,115 @@ func (ctx *renderContext) renderChildren(n *html.Node) {
 	for c := n.FirstChild; c != nil; c = c.NextSibling {
 		ctx.renderNode(c)
 	}
+}
+
+func (ctx *renderContext) renderSpan(n *html.Node) {
+	ids := splitOutputDiscussionURLs(getAttr(n, "discussion-urls"))
+	if len(ids) == 0 {
+		ctx.renderChildren(n)
+		return
+	}
+
+	renderedComments := make([]Comment, 0)
+	for _, id := range ids {
+		canonicalID := canonicalOutputDiscussionID(id)
+		comments := ctx.inlineComments[canonicalID]
+		if len(comments) == 0 {
+			continue
+		}
+		ctx.usedDiscussions[canonicalID] = true
+		renderedComments = append(renderedComments, comments...)
+	}
+
+	if len(renderedComments) == 0 {
+		ctx.renderChildren(n)
+		return
+	}
+
+	highlighted := strings.TrimSpace(ctx.renderNodeToString(n))
+	if highlighted != "" {
+		ctx.out.WriteString("[[" + highlighted + "]]")
+	} else {
+		ctx.renderChildren(n)
+	}
+
+	ctx.out.WriteString("\n")
+	ctx.renderInlineCommentBlock(renderedComments)
+}
+
+func (ctx *renderContext) renderInlineCommentBlock(comments []Comment) {
+	for _, comment := range comments {
+		header := commentAuthorName(comment)
+		if timeLabel := formatTime(comment.CreatedTime); timeLabel != "" {
+			header += " · " + timeLabel
+		}
+		if statusLabel := commentStatusLabel(comment); statusLabel != "" {
+			header += " · " + statusLabel
+		}
+
+		ctx.out.WriteString("\n> Comment — " + header + "\n")
+		for _, line := range strings.Split(strings.TrimSpace(comment.Content), "\n") {
+			ctx.out.WriteString("> " + line + "\n")
+		}
+		ctx.out.WriteString("\n\n")
+	}
+}
+
+func (ctx *renderContext) renderNodeToString(n *html.Node) string {
+	var out strings.Builder
+	childCtx := &renderContext{
+		out:             &out,
+		inQuote:         ctx.inQuote,
+		inlineComments:  ctx.inlineComments,
+		usedDiscussions: ctx.usedDiscussions,
+	}
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		childCtx.renderNode(c)
+	}
+	return strings.TrimSpace(out.String())
+}
+
+func buildInlineCommentIndex(comments []Comment) map[string][]Comment {
+	index := make(map[string][]Comment)
+	for _, comment := range comments {
+		canonicalID := canonicalOutputDiscussionID(comment.DiscussionID)
+		if canonicalID == "" {
+			continue
+		}
+		index[canonicalID] = append(index[canonicalID], comment)
+	}
+	return index
+}
+
+func splitOutputDiscussionURLs(value string) []string {
+	parts := strings.FieldsFunc(value, func(r rune) bool {
+		return r == ',' || r == ' ' || r == '\n' || r == '\t'
+	})
+	ids := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if part == "" {
+			continue
+		}
+		ids = append(ids, part)
+	}
+	return ids
+}
+
+func canonicalOutputDiscussionID(id string) string {
+	if !strings.HasPrefix(id, "discussion://") {
+		return id
+	}
+
+	body := strings.TrimPrefix(id, "discussion://")
+	parts := strings.Split(body, "/")
+	if len(parts) == 0 {
+		return id
+	}
+	last := strings.TrimSpace(parts[len(parts)-1])
+	if last == "" {
+		return id
+	}
+	return "discussion://" + last
 }
 
 func (ctx *renderContext) renderCallout(n *html.Node) {

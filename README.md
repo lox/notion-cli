@@ -62,7 +62,8 @@ notion-cli page list                           # List pages
 notion-cli page list --limit 50                # Limit results
 notion-cli page list --json                    # Output as JSON
 
-notion-cli page view <url>                     # View page content
+notion-cli page view <url>                     # View page content with comments
+notion-cli page view <url> --no-comments       # Hide page and block comments
 notion-cli page view <url> --raw               # View raw Notion markup
 notion-cli page view <url> --json              # Output as JSON
 
@@ -123,10 +124,11 @@ The `<database>` argument accepts a URL, ID, or name. Date properties use the ex
 ### Comments
 
 ```bash
-notion-cli comment list <page-id>              # List comments on a page
-notion-cli comment list <page-id> --json       # Output as JSON
+notion-cli comment list <page>                 # List open page and block comments
+notion-cli comment list <page> --resolved      # Include resolved discussions too
+notion-cli comment list <page> --json          # Output as JSON
 
-notion-cli comment create <page-id> --content "Comment text"
+notion-cli comment create <page> --content "Comment text"
 ```
 
 ### Other

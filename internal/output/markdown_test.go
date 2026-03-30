@@ -1,6 +1,7 @@
 package output
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -96,5 +97,45 @@ func TestParseNotionResponse_Ancestors(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestNotionToMarkdownWithComments_InlineDiscussion(t *testing.T) {
+	content := `Intro <span discussion-urls="discussion://discussion-1">anchored text</span> end.`
+	markdown, used := notionToMarkdownWithComments(content, []Comment{{
+		DiscussionID:  "discussion://page/block/discussion-1",
+		CreatedByName: "Person Example",
+		Content:       "Inline comment body",
+	}})
+
+	if !strings.Contains(markdown, "anchored text") {
+		t.Fatalf("expected anchor text in markdown, got %q", markdown)
+	}
+	if !strings.Contains(markdown, "[[anchored text]]") {
+		t.Fatalf("expected highlighted anchor text in markdown, got %q", markdown)
+	}
+	if !strings.Contains(markdown, "> Comment — Person Example") {
+		t.Fatalf("expected inline comment header in markdown, got %q", markdown)
+	}
+	if !strings.Contains(markdown, "> Inline comment body") {
+		t.Fatalf("expected inline comment body in markdown, got %q", markdown)
+	}
+	if !used["discussion://discussion-1"] {
+		t.Fatalf("expected discussion to be marked used")
+	}
+}
+
+func TestRemainingPageComments_FiltersInlineComments(t *testing.T) {
+	comments := []Comment{
+		{DiscussionID: "discussion://page/block/discussion-1", Content: "Inline"},
+		{DiscussionID: "discussion://page/block/discussion-2", Content: "Page level"},
+	}
+
+	remaining := remainingPageComments(comments, map[string]bool{"discussion://discussion-1": true})
+	if len(remaining) != 1 {
+		t.Fatalf("expected 1 remaining comment, got %d", len(remaining))
+	}
+	if remaining[0].Content != "Page level" {
+		t.Fatalf("expected page-level comment to remain, got %#v", remaining[0])
 	}
 }

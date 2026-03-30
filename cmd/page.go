@@ -76,17 +76,18 @@ func filterPages(results []mcp.SearchResult, limit int) []output.Page {
 }
 
 type PageViewCmd struct {
-	Page string `arg:"" help:"Page URL, name, or ID"`
-	JSON bool   `help:"Output as JSON" short:"j"`
-	Raw  bool   `help:"Output raw Notion response without formatting" short:"r"`
+	Page     string `arg:"" help:"Page URL, name, or ID"`
+	Comments bool   `help:"Show open page and block comments" default:"true" negatable:""`
+	JSON     bool   `help:"Output as JSON" short:"j"`
+	Raw      bool   `help:"Output raw Notion response without formatting" short:"r"`
 }
 
 func (c *PageViewCmd) Run(ctx *Context) error {
 	ctx.JSON = c.JSON
-	return runPageView(ctx, c.Page, c.Raw)
+	return runPageView(ctx, c.Page, c.Raw, c.Comments)
 }
 
-func runPageView(ctx *Context, page string, raw bool) error {
+func runPageView(ctx *Context, page string, raw, includeComments bool) error {
 	client, err := cli.RequireClient()
 	if err != nil {
 		return err
@@ -108,26 +109,57 @@ func runPageView(ctx *Context, page string, raw bool) error {
 		return err
 	}
 
-	if ctx.JSON {
-		return output.PrintPage(output.Page{
-			ID:      fetchID,
-			Title:   result.Title,
-			URL:     result.URL,
-			Content: result.Content,
-		}, true)
-	}
-
-	if result.Content == "" {
-		output.PrintWarning("No content found")
-		return nil
-	}
-
 	if raw {
 		fmt.Println(result.Content)
 		return nil
 	}
 
-	return output.RenderPage(result.Content)
+	comments, err := loadPageViewComments(bgCtx, client, fetchID, result.Content, includeComments)
+	if err != nil {
+		output.PrintError(err)
+		return err
+	}
+
+	pageOutput := output.Page{
+		ID:      fetchID,
+		Title:   result.Title,
+		URL:     result.URL,
+		Content: result.Content,
+	}
+
+	if ctx.JSON {
+		return output.PrintViewedPage(pageOutput, comments, true)
+	}
+
+	if result.Content == "" {
+		output.PrintWarning("No content found")
+		if len(comments) == 0 {
+			return nil
+		}
+		fmt.Println()
+	}
+
+	return output.PrintViewedPage(pageOutput, comments, false)
+}
+
+func loadPageViewComments(ctx context.Context, client *mcp.Client, pageID, pageContent string, includeComments bool) ([]output.Comment, error) {
+	if !shouldLoadPageViewComments(false, includeComments) {
+		return nil, nil
+	}
+
+	resp, err := client.GetComments(ctx, buildCommentListRequest(pageID, false))
+	if err != nil {
+		return nil, err
+	}
+
+	comments := convertComments(resp.Comments)
+	hydrateCommentContextsFromPageContent(pageContent, comments)
+	hydrateCommentAuthors(ctx, client, comments)
+	return comments, nil
+}
+
+func shouldLoadPageViewComments(raw, includeComments bool) bool {
+	return includeComments && !raw
 }
 
 type pageIDResolver func(context.Context, *mcp.Client, string) (string, error)

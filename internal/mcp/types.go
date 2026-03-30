@@ -87,6 +87,8 @@ type Comment struct {
 	Object         string     `json:"object"`
 	Parent         Parent     `json:"parent"`
 	DiscussionID   string     `json:"discussion_id"`
+	Context        string     `json:"context,omitempty"`
+	Resolved       bool       `json:"resolved,omitempty"`
 	CreatedTime    time.Time  `json:"created_time"`
 	LastEditedTime time.Time  `json:"last_edited_time"`
 	CreatedBy      UserRef    `json:"created_by"`

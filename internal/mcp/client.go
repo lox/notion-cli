@@ -3,10 +3,12 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/client/transport"
@@ -382,13 +384,30 @@ func buildUpdatePageToolArgs(req UpdatePageRequest) map[string]any {
 }
 
 type GetCommentsRequest struct {
-	PageID   string `json:"page_id,omitempty"`
-	BlockID  string `json:"block_id,omitempty"`
-	Cursor   string `json:"cursor,omitempty"`
-	PageSize int    `json:"page_size,omitempty"`
+	PageID           string `json:"page_id,omitempty"`
+	BlockID          string `json:"block_id,omitempty"`
+	Cursor           string `json:"cursor,omitempty"`
+	PageSize         int    `json:"page_size,omitempty"`
+	IncludeAllBlocks bool   `json:"include_all_blocks,omitempty"`
+	IncludeResolved  bool   `json:"include_resolved,omitempty"`
+	DiscussionID     string `json:"discussion_id,omitempty"`
 }
 
 func (c *Client) GetComments(ctx context.Context, req GetCommentsRequest) (*CommentsResponse, error) {
+	args := buildGetCommentsToolArgs(req)
+
+	result, err := c.CallTool(ctx, "notion-get-comments", args)
+	if err != nil {
+		return nil, err
+	}
+	if err := checkToolError(result); err != nil {
+		return nil, err
+	}
+
+	return parseCommentsResponse(extractText(result))
+}
+
+func buildGetCommentsToolArgs(req GetCommentsRequest) map[string]any {
 	args := make(map[string]any)
 	if req.PageID != "" {
 		args["page_id"] = req.PageID
@@ -402,8 +421,201 @@ func (c *Client) GetComments(ctx context.Context, req GetCommentsRequest) (*Comm
 	if req.PageSize > 0 {
 		args["page_size"] = req.PageSize
 	}
+	if req.IncludeAllBlocks {
+		args["include_all_blocks"] = true
+	}
+	if req.IncludeResolved {
+		args["include_resolved"] = true
+	}
+	if req.DiscussionID != "" {
+		args["discussion_id"] = req.DiscussionID
+	}
+	return args
+}
 
-	result, err := c.CallTool(ctx, "notion-get-comments", args)
+type commentsXMLWrapper struct {
+	Text string `json:"text"`
+}
+
+type discussionsXML struct {
+	XMLName     xml.Name        `xml:"discussions"`
+	Discussions []discussionXML `xml:"discussion"`
+}
+
+type discussionXML struct {
+	ID          string       `xml:"id,attr"`
+	Resolved    bool         `xml:"resolved,attr"`
+	TextContext string       `xml:"text-context,attr"`
+	Comments    []commentXML `xml:"comment"`
+}
+
+type commentXML struct {
+	ID       string `xml:"id,attr"`
+	UserURL  string `xml:"user-url,attr"`
+	Datetime string `xml:"datetime,attr"`
+	Body     string `xml:",chardata"`
+}
+
+func parseCommentsResponse(text string) (*CommentsResponse, error) {
+	trimmed := strings.TrimSpace(text)
+	if trimmed == "" || trimmed == "{}" {
+		return &CommentsResponse{}, nil
+	}
+
+	if strings.HasPrefix(trimmed, "<discussions") {
+		return parseCommentsXML(trimmed)
+	}
+
+	var wrapper commentsXMLWrapper
+	if err := json.Unmarshal([]byte(trimmed), &wrapper); err == nil && wrapper.Text != "" {
+		return parseCommentsXML(wrapper.Text)
+	}
+
+	var resp CommentsResponse
+	if err := json.Unmarshal([]byte(trimmed), &resp); err == nil {
+		if strings.Contains(trimmed, `"comments"`) || strings.Contains(trimmed, `"next_cursor"`) || strings.Contains(trimmed, `"has_more"`) {
+			return &resp, nil
+		}
+	}
+
+	return nil, fmt.Errorf("parse comments: unsupported response format")
+}
+
+func parseCommentsXML(text string) (*CommentsResponse, error) {
+	var doc discussionsXML
+	if err := xml.Unmarshal([]byte(sanitiseCommentsXML(text)), &doc); err != nil {
+		return nil, fmt.Errorf("parse comments xml: %w", err)
+	}
+
+	comments := make([]Comment, 0)
+	for _, discussion := range doc.Discussions {
+		for _, comment := range discussion.Comments {
+			createdAt, _ := time.Parse(time.RFC3339Nano, comment.Datetime)
+			body := strings.TrimSpace(comment.Body)
+			comments = append(comments, Comment{
+				ID:           comment.ID,
+				Object:       "comment",
+				DiscussionID: discussion.ID,
+				Context:      strings.TrimSpace(discussion.TextContext),
+				Resolved:     discussion.Resolved,
+				CreatedTime:  createdAt,
+				CreatedBy: UserRef{
+					ID: extractCommentUserID(comment.UserURL),
+				},
+				RichText: []RichText{{
+					Type:      "text",
+					PlainText: body,
+					Text: &TextContent{
+						Content: body,
+					},
+				}},
+			})
+		}
+	}
+
+	return &CommentsResponse{Comments: comments}, nil
+}
+
+func extractCommentUserID(userURL string) string {
+	return strings.TrimPrefix(userURL, "user://")
+}
+
+func sanitiseCommentsXML(text string) string {
+	var out strings.Builder
+	out.Grow(len(text))
+
+	for i := 0; i < len(text); i++ {
+		if text[i] != '&' {
+			out.WriteByte(text[i])
+			continue
+		}
+
+		if entity, width, ok := parseXMLEntity(text[i+1:]); ok {
+			out.WriteByte('&')
+			out.WriteString(entity)
+			out.WriteByte(';')
+			i += width
+			continue
+		}
+
+		out.WriteString("&amp;")
+	}
+
+	return out.String()
+}
+
+func parseXMLEntity(text string) (entity string, width int, ok bool) {
+	semi := strings.IndexByte(text, ';')
+	if semi <= 0 {
+		return "", 0, false
+	}
+
+	entity = text[:semi]
+	if !isValidXMLEntity(entity) {
+		return "", 0, false
+	}
+
+	return entity, semi + 1, true
+}
+
+func isValidXMLEntity(entity string) bool {
+	if entity == "" {
+		return false
+	}
+
+	if entity[0] == '#' {
+		if len(entity) == 1 {
+			return false
+		}
+		if entity[1] == 'x' || entity[1] == 'X' {
+			if len(entity) == 2 {
+				return false
+			}
+			for i := 2; i < len(entity); i++ {
+				if !isHexDigit(entity[i]) {
+					return false
+				}
+			}
+			return true
+		}
+		for i := 1; i < len(entity); i++ {
+			if entity[i] < '0' || entity[i] > '9' {
+				return false
+			}
+		}
+		return true
+	}
+
+	for i := 0; i < len(entity); i++ {
+		if (entity[i] < 'A' || entity[i] > 'Z') && (entity[i] < 'a' || entity[i] > 'z') {
+			return false
+		}
+	}
+
+	return true
+}
+
+func isHexDigit(b byte) bool {
+	return (b >= '0' && b <= '9') || (b >= 'a' && b <= 'f') || (b >= 'A' && b <= 'F')
+}
+
+type getUsersResponse struct {
+	Results    []getUserResult `json:"results"`
+	NextCursor string          `json:"next_cursor,omitempty"`
+	HasMore    bool            `json:"has_more"`
+}
+
+type getUserResult struct {
+	ID    string `json:"id"`
+	Type  string `json:"type"`
+	Name  string `json:"name"`
+	Email string `json:"email,omitempty"`
+}
+
+func (c *Client) GetUser(ctx context.Context, userID string) (*User, error) {
+	result, err := c.CallTool(ctx, "notion-get-users", map[string]any{
+		"user_id": userID,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -411,13 +623,41 @@ func (c *Client) GetComments(ctx context.Context, req GetCommentsRequest) (*Comm
 		return nil, err
 	}
 
-	text := extractText(result)
-	var resp CommentsResponse
-	if err := json.Unmarshal([]byte(text), &resp); err != nil {
-		return nil, fmt.Errorf("parse comments: %w", err)
+	users, err := parseUsersResponse(extractText(result))
+	if err != nil {
+		return nil, err
+	}
+	if len(users) == 0 {
+		return nil, nil
+	}
+	return &users[0], nil
+}
+
+func parseUsersResponse(text string) ([]User, error) {
+	trimmed := strings.TrimSpace(text)
+	if trimmed == "" || trimmed == "{}" {
+		return nil, nil
 	}
 
-	return &resp, nil
+	var resp getUsersResponse
+	if err := json.Unmarshal([]byte(trimmed), &resp); err != nil {
+		return nil, fmt.Errorf("parse users: %w", err)
+	}
+
+	users := make([]User, 0, len(resp.Results))
+	for _, result := range resp.Results {
+		user := User{
+			ID:   result.ID,
+			Type: result.Type,
+			Name: result.Name,
+		}
+		if result.Email != "" {
+			user.Person = &Person{Email: result.Email}
+		}
+		users = append(users, user)
+	}
+
+	return users, nil
 }
 
 type CreateCommentRequest struct {

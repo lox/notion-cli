@@ -70,6 +70,7 @@ notion-cli page list --json
 
 # View a page (renders as markdown in terminal)
 notion-cli page view <page>
+notion-cli page view <page> --no-comments    # Hide page and block comments
 notion-cli page view <page> --raw            # Show raw Notion markup
 notion-cli page view <page> --json           # JSON output
 notion-cli page view "Meeting Notes"         # By name
@@ -139,10 +140,11 @@ notion-cli db create <database> -t "Title" --json
 ### Comments
 
 ```bash
-notion-cli comment list <page-id>           # List comments on a page
-notion-cli comment list <page-id> --json
+notion-cli comment list <page>              # List open page and block comments
+notion-cli comment list <page> --resolved   # Include resolved discussions too
+notion-cli comment list <page> --json
 
-notion-cli comment create <page-id> --content "Great work!"
+notion-cli comment create <page> --content "Great work!"
 ```
 
 ## Output Formats

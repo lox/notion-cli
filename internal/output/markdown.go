@@ -103,8 +103,16 @@ func RenderMarkdown(content string) error {
 
 // RenderPage renders a Notion page with pretty metadata header
 func RenderPage(content string) error {
+	return RenderPageWithComments(content, nil)
+}
+
+func RenderPageWithComments(content string, comments []Comment) error {
 	isTTY := term.IsTerminal(int(os.Stdout.Fd()))
 	meta, body := parseNotionResponse(content)
+	usedInlineComments := make(map[string]bool)
+	if rawBody, ok := extractNotionContentBody(content); ok {
+		body, usedInlineComments = notionToMarkdownWithComments(rawBody, comments)
+	}
 
 	if meta != nil {
 		renderPageHeader(meta, isTTY)
@@ -115,10 +123,45 @@ func RenderPage(content string) error {
 		if err != nil {
 			return err
 		}
-		return r.RenderAndPrint(body)
+		if err := r.RenderAndPrint(body); err != nil {
+			return err
+		}
+	}
+
+	remainingComments := remainingPageComments(comments, usedInlineComments)
+	if len(remainingComments) > 0 {
+		if meta != nil || body != "" {
+			fmt.Println()
+			_, _ = color.New(color.Faint).Println("─── Comments ───")
+			fmt.Println()
+		}
+		return PrintComments(remainingComments, false)
 	}
 
 	return nil
+}
+
+func extractNotionContentBody(content string) (string, bool) {
+	contentRe := regexp.MustCompile(`(?s)<content>\s*(.*?)\s*</content>`)
+	match := contentRe.FindStringSubmatch(content)
+	if len(match) <= 1 {
+		return "", false
+	}
+	return match[1], true
+}
+
+func remainingPageComments(comments []Comment, usedInlineComments map[string]bool) []Comment {
+	if len(comments) == 0 {
+		return nil
+	}
+	remaining := make([]Comment, 0, len(comments))
+	for _, comment := range comments {
+		if usedInlineComments[canonicalOutputDiscussionID(comment.DiscussionID)] {
+			continue
+		}
+		remaining = append(remaining, comment)
+	}
+	return remaining
 }
 
 type ancestor struct {
@@ -186,9 +229,7 @@ func parseNotionResponse(content string) (*pageMetadata, string) {
 	}
 
 	// Extract content from <content> tag
-	contentRe := regexp.MustCompile(`(?s)<content>\s*(.*?)\s*</content>`)
-	if match := contentRe.FindStringSubmatch(content); len(match) > 1 {
-		body := match[1]
+	if body, ok := extractNotionContentBody(content); ok {
 		// Convert Notion markup to Markdown using HTML parser
 		body = notionToMarkdown(body)
 		return meta, body
