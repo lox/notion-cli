@@ -13,6 +13,8 @@ import (
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/client/transport"
 	"github.com/mark3labs/mcp-go/mcp"
+	"golang.org/x/net/html"
+	"golang.org/x/net/html/atom"
 )
 
 const (
@@ -475,7 +477,7 @@ type commentXML struct {
 	ID       string `xml:"id,attr"`
 	UserURL  string `xml:"user-url,attr"`
 	Datetime string `xml:"datetime,attr"`
-	Body     string `xml:",chardata"`
+	Body     string `xml:",innerxml"`
 }
 
 func parseCommentsResponse(text string) (*CommentsResponse, error) {
@@ -513,7 +515,7 @@ func parseCommentsXML(text string) (*CommentsResponse, error) {
 	for _, discussion := range doc.Discussions {
 		for _, comment := range discussion.Comments {
 			createdAt, _ := time.Parse(time.RFC3339Nano, comment.Datetime)
-			body := strings.TrimSpace(comment.Body)
+			body := extractCommentBodyText(comment.Body)
 			comments = append(comments, Comment{
 				ID:           comment.ID,
 				Object:       "comment",
@@ -542,7 +544,86 @@ func extractCommentUserID(userURL string) string {
 	return strings.TrimPrefix(userURL, "user://")
 }
 
+func extractCommentBodyText(body string) string {
+	body = strings.TrimSpace(body)
+	if body == "" {
+		return ""
+	}
+
+	nodes, err := html.ParseFragment(strings.NewReader(body), &html.Node{Type: html.ElementNode, DataAtom: atom.Div, Data: "div"})
+	if err != nil {
+		return body
+	}
+
+	var out strings.Builder
+	for _, node := range nodes {
+		appendCommentBodyText(&out, node)
+	}
+
+	return strings.TrimSpace(collapseCommentBodyWhitespace(out.String()))
+}
+
+func appendCommentBodyText(out *strings.Builder, node *html.Node) {
+	if node == nil {
+		return
+	}
+
+	switch node.Type {
+	case html.TextNode:
+		out.WriteString(node.Data)
+		return
+	case html.ElementNode:
+		if node.DataAtom == atom.Br {
+			ensureTrailingCommentNewline(out)
+			return
+		}
+		if isCommentBlockNode(node.DataAtom) {
+			ensureTrailingCommentNewline(out)
+		}
+	}
+
+	for child := node.FirstChild; child != nil; child = child.NextSibling {
+		appendCommentBodyText(out, child)
+	}
+
+	if node.Type == html.ElementNode && isCommentBlockNode(node.DataAtom) {
+		ensureTrailingCommentNewline(out)
+	}
+}
+
+func isCommentBlockNode(tag atom.Atom) bool {
+	switch tag {
+	case atom.P, atom.Div, atom.Li, atom.Ul, atom.Ol, atom.Blockquote:
+		return true
+	default:
+		return false
+	}
+}
+
+func ensureTrailingCommentNewline(out *strings.Builder) {
+	if out.Len() == 0 {
+		return
+	}
+	if strings.HasSuffix(out.String(), "\n") {
+		return
+	}
+	out.WriteByte('\n')
+}
+
+func collapseCommentBodyWhitespace(text string) string {
+	text = strings.ReplaceAll(text, "\r\n", "\n")
+	text = strings.ReplaceAll(text, "\r", "\n")
+	text = regexp.MustCompile(`\n+`).ReplaceAllString(text, "\n")
+	return text
+}
+
 func sanitiseCommentsXML(text string) string {
+	text = strings.NewReplacer(
+		"<br>", "&#10;",
+		"<br/>", "&#10;",
+		"<br />", "&#10;",
+	).Replace(text)
+
 	var out strings.Builder
 	out.Grow(len(text))
 
