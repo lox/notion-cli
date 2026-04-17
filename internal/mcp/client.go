@@ -556,7 +556,10 @@ func extractCommentBodyText(body string) string {
 	}
 
 	var out strings.Builder
-	for _, node := range nodes {
+	for i, node := range nodes {
+		if shouldSkipCommentWhitespaceFragmentNode(nodes, i) {
+			continue
+		}
 		appendCommentBodyText(&out, node)
 	}
 
@@ -570,6 +573,9 @@ func appendCommentBodyText(out *strings.Builder, node *html.Node) {
 
 	switch node.Type {
 	case html.TextNode:
+		if shouldSkipCommentWhitespaceTextNode(node) {
+			return
+		}
 		out.WriteString(node.Data)
 		return
 	case html.ElementNode:
@@ -589,6 +595,66 @@ func appendCommentBodyText(out *strings.Builder, node *html.Node) {
 	if node.Type == html.ElementNode && isCommentBlockNode(node.DataAtom) {
 		ensureTrailingCommentNewline(out)
 	}
+}
+
+func shouldSkipCommentWhitespaceTextNode(node *html.Node) bool {
+	if node == nil || node.Type != html.TextNode || strings.TrimSpace(node.Data) != "" {
+		return false
+	}
+	return isCommentBlockHTMLNode(adjacentNonWhitespaceSibling(node, true)) || isCommentBlockHTMLNode(adjacentNonWhitespaceSibling(node, false))
+}
+
+func shouldSkipCommentWhitespaceFragmentNode(nodes []*html.Node, index int) bool {
+	if index < 0 || index >= len(nodes) {
+		return false
+	}
+	node := nodes[index]
+	if node == nil || node.Type != html.TextNode || strings.TrimSpace(node.Data) != "" {
+		return false
+	}
+	return isCommentBlockHTMLNode(adjacentNonWhitespaceFragmentNode(nodes, index, true)) || isCommentBlockHTMLNode(adjacentNonWhitespaceFragmentNode(nodes, index, false))
+}
+
+func adjacentNonWhitespaceFragmentNode(nodes []*html.Node, index int, previous bool) *html.Node {
+	for i := index + offsetForDirection(previous); i >= 0 && i < len(nodes); i += offsetForDirection(previous) {
+		node := nodes[i]
+		if node == nil {
+			continue
+		}
+		if node.Type == html.TextNode && strings.TrimSpace(node.Data) == "" {
+			continue
+		}
+		return node
+	}
+	return nil
+}
+
+func offsetForDirection(previous bool) int {
+	if previous {
+		return -1
+	}
+	return 1
+}
+
+func adjacentNonWhitespaceSibling(node *html.Node, previous bool) *html.Node {
+	for sibling := siblingNode(node, previous); sibling != nil; sibling = siblingNode(sibling, previous) {
+		if sibling.Type == html.TextNode && strings.TrimSpace(sibling.Data) == "" {
+			continue
+		}
+		return sibling
+	}
+	return nil
+}
+
+func siblingNode(node *html.Node, previous bool) *html.Node {
+	if previous {
+		return node.PrevSibling
+	}
+	return node.NextSibling
+}
+
+func isCommentBlockHTMLNode(node *html.Node) bool {
+	return node != nil && node.Type == html.ElementNode && isCommentBlockNode(node.DataAtom)
 }
 
 func isCommentBlockNode(tag atom.Atom) bool {
