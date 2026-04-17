@@ -560,7 +560,7 @@ func extractCommentBodyText(body string) string {
 		appendCommentBodyText(&out, node)
 	}
 
-	return strings.TrimSpace(collapseCommentBodyWhitespace(out.String()))
+	return strings.TrimSpace(normaliseCommentBodyLineEndings(out.String()))
 }
 
 func appendCommentBodyText(out *strings.Builder, node *html.Node) {
@@ -610,10 +610,9 @@ func ensureTrailingCommentNewline(out *strings.Builder) {
 	out.WriteByte('\n')
 }
 
-func collapseCommentBodyWhitespace(text string) string {
+func normaliseCommentBodyLineEndings(text string) string {
 	text = strings.ReplaceAll(text, "\r\n", "\n")
 	text = strings.ReplaceAll(text, "\r", "\n")
-	text = regexp.MustCompile(`\n+`).ReplaceAllString(text, "\n")
 	return text
 }
 
