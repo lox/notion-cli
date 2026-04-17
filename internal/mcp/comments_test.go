@@ -169,6 +169,18 @@ func TestParseCommentsResponseXMLWrapperWithConsecutiveHTMLLineBreaks(t *testing
 	}
 }
 
+func TestParseCommentsResponseXMLWrapperWithXMLLineBreakPair(t *testing.T) {
+	raw := `{"text":"<discussions total-count=\"1\" shown-count=\"1\"><discussion id=\"discussion://page/block/discussion\" comment-count=\"1\" resolved=\"false\" type=\"comment\" context=\"inline\"><comment id=\"comment-1\" user-url=\"user://user-123\" datetime=\"2026-03-29T22:31:40.086Z\">Hello<br></br>goodbye</comment></discussion></discussions>"}`
+
+	resp, err := parseCommentsResponse(raw)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if got := resp.Comments[0].RichText[0].PlainText; got != "Hello\ngoodbye" {
+		t.Fatalf("expected XML line break pair to be preserved, got %q", got)
+	}
+}
+
 func TestParseCommentsResponseXMLWrapperWithInlineHTMLFormatting(t *testing.T) {
 	raw := `{"text":"<discussions total-count=\"1\" shown-count=\"1\"><discussion id=\"discussion://page/block/discussion\" comment-count=\"1\" resolved=\"false\" type=\"comment\" context=\"inline\"><comment id=\"comment-1\" user-url=\"user://user-123\" datetime=\"2026-03-29T22:31:40.086Z\">Hello <strong>bold</strong> goodbye</comment></discussion></discussions>"}`
 

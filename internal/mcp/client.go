@@ -574,7 +574,7 @@ func appendCommentBodyText(out *strings.Builder, node *html.Node) {
 		return
 	case html.ElementNode:
 		if node.DataAtom == atom.Br {
-			ensureTrailingCommentNewline(out)
+			out.WriteByte('\n')
 			return
 		}
 		if isCommentBlockNode(node.DataAtom) {
@@ -618,9 +618,12 @@ func normaliseCommentBodyLineEndings(text string) string {
 
 func sanitiseCommentsXML(text string) string {
 	text = strings.NewReplacer(
-		"<br>", "&#10;",
-		"<br/>", "&#10;",
-		"<br />", "&#10;",
+		"<br></br>", "<br/>",
+		"<br ></br>", "<br/>",
+	).Replace(text)
+	text = strings.NewReplacer(
+		"<br>", "<br/>",
+		"<br >", "<br/>",
 	).Replace(text)
 
 	var out strings.Builder
