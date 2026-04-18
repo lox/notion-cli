@@ -71,7 +71,20 @@ func RunOAuthFlow(ctx context.Context, tokenStore *FileTokenStore, opts *OAuthFl
 	defer func() { _ = listener.Close() }()
 
 	port := listener.Addr().(*net.TCPAddr).Port
-	redirectURI := fmt.Sprintf("http://localhost:%d%s", port, callbackPath)
+
+	// When tunneled, the callback is publicly reachable, so use an
+	// unguessable per-attempt path to prevent unsolicited requests from
+	// consuming the callback before the real OAuth redirect arrives.
+	cbPath := callbackPath
+	if opts.Tunnel {
+		nonce, err := GenerateState() // reuse the same random generator
+		if err != nil {
+			return fmt.Errorf("generate callback nonce: %w", err)
+		}
+		cbPath = callbackPath + "/" + nonce
+	}
+
+	redirectURI := fmt.Sprintf("http://localhost:%d%s", port, cbPath)
 
 	if opts.Tunnel {
 		fmt.Println("Starting tunnel...")
@@ -80,7 +93,7 @@ func RunOAuthFlow(ctx context.Context, tokenStore *FileTokenStore, opts *OAuthFl
 			return fmt.Errorf("start tunnel: %w", err)
 		}
 		defer tun.Close()
-		redirectURI = tun.URL + callbackPath
+		redirectURI = tun.URL + cbPath
 		fmt.Printf("Tunnel active: %s\n", tun.URL)
 	}
 
@@ -152,7 +165,7 @@ func RunOAuthFlow(ctx context.Context, tokenStore *FileTokenStore, opts *OAuthFl
 
 	server := &http.Server{
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path != callbackPath {
+			if r.URL.Path != cbPath {
 				http.NotFound(w, r)
 				return
 			}
