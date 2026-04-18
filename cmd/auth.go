@@ -34,7 +34,9 @@ var notionAPITokenPattern = regexp.MustCompile(`^ntn_[A-Za-z0-9]{20,}$`)
 
 const officialAPIIntegrationsURL = "https://www.notion.so/profile/integrations/internal"
 
-type AuthLoginCmd struct{}
+type AuthLoginCmd struct {
+	Tunnel bool `help:"Use a tunnel for the OAuth callback, allowing login from a remote machine without a local browser" default:"false"`
+}
 
 func (c *AuthLoginCmd) Run(ctx *Context) error {
 	tokenStore, err := mcp.NewFileTokenStore()
@@ -44,7 +46,10 @@ func (c *AuthLoginCmd) Run(ctx *Context) error {
 	}
 
 	bgCtx := context.Background()
-	if err := mcp.RunOAuthFlow(bgCtx, tokenStore); err != nil {
+	opts := &mcp.OAuthFlowOptions{
+		Tunnel: c.Tunnel,
+	}
+	if err := mcp.RunOAuthFlow(bgCtx, tokenStore, opts); err != nil {
 		output.PrintError(err)
 		return err
 	}

@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/lox/notion-cli/internal/tunnel"
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/client/transport"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -51,7 +52,18 @@ type OAuthResult struct {
 	Error string
 }
 
-func RunOAuthFlow(ctx context.Context, tokenStore *FileTokenStore) error {
+// OAuthFlowOptions configures the OAuth login flow.
+type OAuthFlowOptions struct {
+	// Tunnel starts a localtunnel to expose the local callback server,
+	// allowing authentication from a machine without a local browser.
+	Tunnel bool
+}
+
+func RunOAuthFlow(ctx context.Context, tokenStore *FileTokenStore, opts *OAuthFlowOptions) error {
+	if opts == nil {
+		opts = &OAuthFlowOptions{}
+	}
+
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return fmt.Errorf("start callback server: %w", err)
@@ -60,6 +72,17 @@ func RunOAuthFlow(ctx context.Context, tokenStore *FileTokenStore) error {
 
 	port := listener.Addr().(*net.TCPAddr).Port
 	redirectURI := fmt.Sprintf("http://localhost:%d%s", port, callbackPath)
+
+	if opts.Tunnel {
+		fmt.Println("Starting tunnel...")
+		tun, err := tunnel.Start(ctx, port)
+		if err != nil {
+			return fmt.Errorf("start tunnel: %w", err)
+		}
+		defer tun.Close()
+		redirectURI = tun.URL + callbackPath
+		fmt.Printf("Tunnel active: %s\n", tun.URL)
+	}
 
 	oauthConfig := transport.OAuthConfig{
 		RedirectURI: redirectURI,
@@ -166,10 +189,19 @@ func RunOAuthFlow(ctx context.Context, tokenStore *FileTokenStore) error {
 	fmt.Println()
 	fmt.Printf("  %s\n", authURL)
 	fmt.Println()
+
+	if opts.Tunnel {
+		fmt.Println("NOTE: After authenticating, you may see a tunnel interstitial page.")
+		fmt.Println("Click \"Click to Continue\" to complete the callback.")
+		fmt.Println()
+	}
+
 	fmt.Println("Waiting for authentication...")
 
-	if err := OpenBrowser(authURL); err != nil {
-		fmt.Printf("(Could not open browser automatically: %v)\n", err)
+	if !opts.Tunnel {
+		if err := OpenBrowser(authURL); err != nil {
+			fmt.Printf("(Could not open browser automatically: %v)\n", err)
+		}
 	}
 
 	select {
