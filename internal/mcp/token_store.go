@@ -9,12 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/lox/notion-cli/internal/profile"
 	"github.com/mark3labs/mcp-go/client/transport"
-)
-
-const (
-	configDir  = ".config/notion-cli"
-	configFile = "token.json"
 )
 
 var ErrNoToken = errors.New("no token available")
@@ -24,13 +20,19 @@ type FileTokenStore struct {
 	mu   sync.RWMutex
 }
 
+// NewFileTokenStore returns a token store backed by the default profile's
+// token.json, matching the legacy behavior before multi-profile support.
 func NewFileTokenStore() (*FileTokenStore, error) {
-	homeDir, err := os.UserHomeDir()
+	return NewFileTokenStoreForProfile(profile.Profile{Name: profile.DefaultName, Source: profile.SourceDefault})
+}
+
+// NewFileTokenStoreForProfile returns a token store rooted at the given
+// profile's on-disk location.
+func NewFileTokenStoreForProfile(p profile.Profile) (*FileTokenStore, error) {
+	path, err := profile.TokenPath(p)
 	if err != nil {
 		return nil, err
 	}
-
-	path := filepath.Join(homeDir, configDir, configFile)
 	return &FileTokenStore{path: path}, nil
 }
 

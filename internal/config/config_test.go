@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/lox/notion-cli/internal/profile"
 )
 
 func TestLoadWithMetaDefaults(t *testing.T) {
@@ -87,6 +89,42 @@ func TestUnsetAPITokenClearsStoredToken(t *testing.T) {
 	}
 	if loaded.APITokenSource != APITokenSourceNone {
 		t.Fatalf("APITokenSource = %q, want %q", loaded.APITokenSource, APITokenSourceNone)
+	}
+}
+
+func TestSetAPITokenIsIsolatedPerProfile(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmp, ".config"))
+
+	work := profile.Profile{Name: "work", Source: profile.SourceFlag}
+	home := profile.Profile{Name: "home", Source: profile.SourceFlag}
+
+	if err := SetAPITokenForProfile(work, "work-token"); err != nil {
+		t.Fatalf("SetAPITokenForProfile(work): %v", err)
+	}
+	if err := SetAPITokenForProfile(home, "home-token"); err != nil {
+		t.Fatalf("SetAPITokenForProfile(home): %v", err)
+	}
+
+	loadedWork, err := LoadWithMetaForProfile(work, APIOverrides{})
+	if err != nil {
+		t.Fatalf("LoadWithMetaForProfile(work): %v", err)
+	}
+	if loadedWork.Config.API.Token != "work-token" {
+		t.Fatalf("work token = %q, want work-token", loadedWork.Config.API.Token)
+	}
+
+	loadedHome, err := LoadWithMetaForProfile(home, APIOverrides{})
+	if err != nil {
+		t.Fatalf("LoadWithMetaForProfile(home): %v", err)
+	}
+	if loadedHome.Config.API.Token != "home-token" {
+		t.Fatalf("home token = %q, want home-token", loadedHome.Config.API.Token)
+	}
+
+	if loadedWork.Path == loadedHome.Path {
+		t.Fatalf("work and home configs share path: %q", loadedWork.Path)
 	}
 }
 
