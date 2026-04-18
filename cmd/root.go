@@ -19,7 +19,12 @@ type CLI struct {
 	APIToken         string `env:"NOTION_API_TOKEN" hidden:""`
 	APIBaseURL       string `env:"NOTION_API_BASE_URL" hidden:""`
 	APINotionVersion string `env:"NOTION_API_NOTION_VERSION" hidden:""`
-	Profile          string `help:"Notion account profile to use (also reads $NOTION_CLI_PROFILE)" env:"NOTION_CLI_PROFILE" name:"profile"`
+	// Profile intentionally does not use Kong's env:"NOTION_CLI_PROFILE" tag.
+	// profile.Resolve needs to see the flag value and env variable as
+	// separate inputs so auth status can attribute the selection to
+	// --profile vs NOTION_CLI_PROFILE; Kong would merge them into one value
+	// and we'd always report SourceFlag.
+	Profile string `help:"Notion account profile to use (also reads $NOTION_CLI_PROFILE)" name:"profile"`
 
 	Auth    AuthCmd    `cmd:"" help:"Authentication commands"`
 	Page    PageCmd    `cmd:"" help:"Page commands"`
