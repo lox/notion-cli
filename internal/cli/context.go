@@ -51,7 +51,7 @@ func GetClient() (*mcp.Client, error) {
 }
 
 func autoRefreshIfNeeded(ctx context.Context) error {
-	tokenStore, err := mcp.NewFileTokenStore()
+	tokenStore, err := mcp.NewFileTokenStoreForProfile(ActiveProfile())
 	if err != nil {
 		return err
 	}

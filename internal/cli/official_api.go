@@ -15,7 +15,7 @@ type OfficialAPIConfig struct {
 }
 
 func LoadOfficialAPIConfig(overrides config.APIOverrides) (*OfficialAPIConfig, error) {
-	loaded, err := config.LoadWithMeta(overrides)
+	loaded, err := config.LoadWithMetaForProfile(ActiveProfile(), overrides)
 	if err != nil {
 		return nil, fmt.Errorf("load config: %w", err)
 	}

@@ -1,11 +1,14 @@
 package main
 
 import (
+	"errors"
+	"fmt"
 	"os"
 
 	"github.com/alecthomas/kong"
 	"github.com/lox/notion-cli/cmd"
 	"github.com/lox/notion-cli/internal/cli"
+	"github.com/lox/notion-cli/internal/profile"
 )
 
 var version = "dev"
@@ -23,14 +26,27 @@ func main() {
 		kong.UsageOnError(),
 		kong.Vars{"version": version},
 	)
+
+	active, err := profile.Resolve(c.Profile)
+	if err != nil {
+		if errors.Is(err, profile.ErrNoProfile) {
+			_, _ = fmt.Fprintln(os.Stderr, "\u2717 No profile specified. Pass --profile <name> or set NOTION_CLI_PROFILE.")
+		} else {
+			_, _ = fmt.Fprintf(os.Stderr, "\u2717 %s\n", err)
+		}
+		os.Exit(1)
+	}
+	cli.SetActiveProfile(active)
 	cli.SetAccessToken(c.Token)
-	err := ctx.Run(&cmd.Context{
+
+	runErr := ctx.Run(&cmd.Context{
 		Token:            c.Token,
 		APIToken:         c.APIToken,
 		APIBaseURL:       c.APIBaseURL,
 		APINotionVersion: c.APINotionVersion,
+		Profile:          active,
 	})
-	ctx.FatalIfErrorf(err)
+	ctx.FatalIfErrorf(runErr)
 	os.Exit(0)
 }
 

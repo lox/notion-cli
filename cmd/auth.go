@@ -37,7 +37,7 @@ const officialAPIIntegrationsURL = "https://www.notion.so/profile/integrations/i
 type AuthLoginCmd struct{}
 
 func (c *AuthLoginCmd) Run(ctx *Context) error {
-	tokenStore, err := mcp.NewFileTokenStore()
+	tokenStore, err := mcp.NewFileTokenStoreForProfile(cli.ActiveProfile())
 	if err != nil {
 		output.PrintError(err)
 		return err
@@ -55,7 +55,7 @@ func (c *AuthLoginCmd) Run(ctx *Context) error {
 type AuthRefreshCmd struct{}
 
 func (c *AuthRefreshCmd) Run(ctx *Context) error {
-	tokenStore, err := mcp.NewFileTokenStore()
+	tokenStore, err := mcp.NewFileTokenStoreForProfile(cli.ActiveProfile())
 	if err != nil {
 		output.PrintError(err)
 		return err
@@ -95,7 +95,7 @@ type AuthStatusCmd struct {
 func (c *AuthStatusCmd) Run(ctx *Context) error {
 	ctx.JSON = c.JSON
 
-	tokenStore, err := mcp.NewFileTokenStore()
+	tokenStore, err := mcp.NewFileTokenStoreForProfile(cli.ActiveProfile())
 	if err != nil {
 		output.PrintError(err)
 		return err
@@ -112,16 +112,19 @@ func (c *AuthStatusCmd) Run(ctx *Context) error {
 	}
 
 	hasValidToken := token.AccessToken != "" && !token.IsExpired()
+	activeProfile := cli.ActiveProfile()
 
 	if ctx.JSON {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
 		return enc.Encode(map[string]any{
-			"authenticated": hasValidToken,
-			"token_type":    token.TokenType,
-			"has_token":     token.AccessToken != "",
-			"expires_at":    token.ExpiresAt,
-			"config_path":   tokenStore.Path(),
+			"authenticated":  hasValidToken,
+			"token_type":     token.TokenType,
+			"has_token":      token.AccessToken != "",
+			"expires_at":     token.ExpiresAt,
+			"config_path":    tokenStore.Path(),
+			"profile":        activeProfile.Name,
+			"profile_source": string(activeProfile.Source),
 		})
 	}
 
@@ -133,6 +136,9 @@ func (c *AuthStatusCmd) Run(ctx *Context) error {
 		output.PrintWarning("Token expired or not set")
 	}
 	fmt.Println()
+
+	_, _ = labelStyle.Print("Profile:     ")
+	fmt.Printf("%s (from %s)\n", activeProfile.Name, activeProfile.Source)
 
 	_, _ = labelStyle.Print("Config path: ")
 	fmt.Println(tokenStore.Path())
@@ -151,7 +157,7 @@ func (c *AuthStatusCmd) Run(ctx *Context) error {
 type AuthLogoutCmd struct{}
 
 func (c *AuthLogoutCmd) Run(ctx *Context) error {
-	tokenStore, err := mcp.NewFileTokenStore()
+	tokenStore, err := mcp.NewFileTokenStoreForProfile(cli.ActiveProfile())
 	if err != nil {
 		output.PrintError(err)
 		return err
@@ -190,7 +196,7 @@ func (c *AuthAPISetupCmd) Run(ctx *Context) error {
 		output.PrintWarning("Official API token does not match the expected Notion token format")
 		_, _ = fmt.Fprintln(authAPIOutput, "Expected format: ntn_<letters-and-numbers>")
 	}
-	if err := config.SetAPIToken(token); err != nil {
+	if err := config.SetAPITokenForProfile(cli.ActiveProfile(), token); err != nil {
 		output.PrintError(err)
 		return err
 	}
@@ -285,7 +291,7 @@ func (c *AuthAPIUnsetCmd) Run(ctx *Context) error {
 		return nil
 	}
 
-	if err := config.UnsetAPIToken(); err != nil {
+	if err := config.UnsetAPITokenForProfile(cli.ActiveProfile()); err != nil {
 		output.PrintError(err)
 		return err
 	}
@@ -375,7 +381,7 @@ func printOfficialAPITokenSetupHint(out io.Writer, shouldOpenBrowser bool) {
 }
 
 func mustConfigPath() string {
-	path, err := config.Path()
+	path, err := config.PathFor(cli.ActiveProfile())
 	if err != nil {
 		return "<unknown>"
 	}
