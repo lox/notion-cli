@@ -174,6 +174,41 @@ The CLI uses Notion's remote MCP server with OAuth authentication. On first run,
 
 **Note:** Access tokens expire after 1 hour. The CLI automatically refreshes tokens when they expire or are about to expire, so you typically don't need to think about this. Use `notion-cli auth refresh` to manually refresh if needed.
 
+### Profiles
+
+Every command accepts `--profile <name>` (or `NOTION_CLI_PROFILE`) to scope the OAuth token and official API config to a specific Notion account, so you can keep separate logins for `work`, `home`, etc.
+
+```bash
+# Log in to a named profile
+notion-cli auth login --profile work
+
+# Use the profile for a single command
+notion-cli page list --profile work
+
+# Pin a profile for the shell session
+export NOTION_CLI_PROFILE=work
+
+# Pin a profile for every invocation (survives across shells)
+cat > ~/.config/notion-cli/settings.json <<'JSON'
+{"default_profile": "work"}
+JSON
+```
+
+Profile resolution, highest priority first:
+
+1. `--profile <name>` flag
+2. `NOTION_CLI_PROFILE` environment variable
+3. `default_profile` in `~/.config/notion-cli/settings.json`
+4. Implicit default (the pre-existing top-level `~/.config/notion-cli/{token,config}.json`)
+
+When none of those resolve (no top-level files, no settings, no flag, no env), every command fails up front with `No profile specified. Pass --profile <name> or set NOTION_CLI_PROFILE.` rather than silently treating the caller as unauthenticated. If you want to force `--profile` on every invocation (for example to keep an agent from ever touching the wrong workspace), remove the top-level `{token,config}.json`.
+
+Profile names must match `^[a-z0-9][a-z0-9_-]*$`.
+
+Named profiles store their credentials under `~/.config/notion-cli/<profile>/{token,config}.json`. The implicit default profile keeps using the existing top-level paths, so existing single-account installs need no migration.
+
+`notion-cli auth status` always prints the active profile and where it was resolved from, so you can verify which account the CLI is about to hit.
+
 ## Environment Variables
 
 | Variable | Description |
@@ -182,6 +217,7 @@ The CLI uses Notion's remote MCP server with OAuth authentication. On first run,
 | `NOTION_API_TOKEN` | Official Notion API token used for upload fallback and verification |
 | `NOTION_API_BASE_URL` | Override the official Notion API base URL |
 | `NOTION_API_NOTION_VERSION` | Override the official Notion API version |
+| `NOTION_CLI_PROFILE` | Default profile when `--profile` is not passed |
 
 ## How It Works
 
