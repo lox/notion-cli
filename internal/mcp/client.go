@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lox/notion-cli/internal/profile"
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/client/transport"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -31,6 +32,8 @@ type ClientOption func(*clientConfig)
 type clientConfig struct {
 	endpoint    string
 	accessToken string
+	profile     profile.Profile
+	hasProfile  bool
 }
 
 func WithEndpoint(endpoint string) ClientOption {
@@ -45,6 +48,16 @@ func WithAccessToken(token string) ClientOption {
 	}
 }
 
+// WithProfile routes the OAuth token store to the given profile so named
+// profiles read and refresh their own credentials instead of falling back
+// to the default profile's top-level files.
+func WithProfile(p profile.Profile) ClientOption {
+	return func(c *clientConfig) {
+		c.profile = p
+		c.hasProfile = true
+	}
+}
+
 func NewClient(opts ...ClientOption) (*Client, error) {
 	cfg := &clientConfig{
 		endpoint: DefaultEndpoint,
@@ -53,7 +66,13 @@ func NewClient(opts ...ClientOption) (*Client, error) {
 		opt(cfg)
 	}
 
-	tokenStore, err := NewFileTokenStore()
+	var tokenStore *FileTokenStore
+	var err error
+	if cfg.hasProfile {
+		tokenStore, err = NewFileTokenStoreForProfile(cfg.profile)
+	} else {
+		tokenStore, err = NewFileTokenStore()
+	}
 	if err != nil {
 		return nil, fmt.Errorf("create token store: %w", err)
 	}

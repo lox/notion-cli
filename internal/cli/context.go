@@ -29,7 +29,7 @@ func GetClient() (*mcp.Client, error) {
 		}
 	}
 
-	var opts []mcp.ClientOption
+	opts := []mcp.ClientOption{mcp.WithProfile(ActiveProfile())}
 	if accessToken != "" {
 		opts = append(opts, mcp.WithAccessToken(accessToken))
 	}
