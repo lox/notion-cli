@@ -59,9 +59,37 @@ type OAuthFlowOptions struct {
 	Tunnel bool
 }
 
+// isAuthenticated attempts a quick MCP Initialize to check whether valid
+// credentials already exist in the token store.
+func isAuthenticated(ctx context.Context, tokenStore *FileTokenStore) bool {
+	cfg := transport.OAuthConfig{TokenStore: tokenStore}
+	t, err := transport.NewStreamableHTTP(DefaultEndpoint, transport.WithHTTPOAuth(cfg))
+	if err != nil {
+		return false
+	}
+	c := client.NewClient(t)
+	defer func() { _ = c.Close() }()
+	if err := c.Start(ctx); err != nil {
+		return false
+	}
+	initReq := mcp.InitializeRequest{}
+	initReq.Params.ProtocolVersion = mcp.LATEST_PROTOCOL_VERSION
+	initReq.Params.ClientInfo = mcp.Implementation{Name: "notion-cli", Version: "0.1.0"}
+	_, err = c.Initialize(ctx, initReq)
+	return err == nil
+}
+
 func RunOAuthFlow(ctx context.Context, tokenStore *FileTokenStore, opts *OAuthFlowOptions) error {
 	if opts == nil {
 		opts = &OAuthFlowOptions{}
+	}
+
+	// Check if already authenticated before starting expensive resources
+	// (tunnels, listeners). This avoids requiring tunnel availability when
+	// the user already has valid credentials.
+	if isAuthenticated(ctx, tokenStore) {
+		fmt.Println("Already authenticated!")
+		return nil
 	}
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
