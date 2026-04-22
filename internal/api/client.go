@@ -59,6 +59,45 @@ type PageMarkdown struct {
 	UnknownBlockIDs []string `json:"unknown_block_ids,omitempty"`
 }
 
+type PageMetadata struct {
+	Object         string      `json:"object"`
+	ID             string      `json:"id"`
+	CreatedTime    time.Time   `json:"created_time"`
+	LastEditedTime time.Time   `json:"last_edited_time"`
+	CreatedBy      PartialUser `json:"created_by"`
+	LastEditedBy   PartialUser `json:"last_edited_by"`
+	Archived       bool        `json:"archived"`
+	InTrash        bool        `json:"in_trash"`
+	Icon           *PageIcon   `json:"icon,omitempty"`
+	Parent         PageParent  `json:"parent"`
+	URL            string      `json:"url"`
+	PublicURL      string      `json:"public_url,omitempty"`
+}
+
+type PartialUser struct {
+	Object string `json:"object"`
+	ID     string `json:"id"`
+}
+
+type PageIcon struct {
+	Type     string `json:"type"`
+	Emoji    string `json:"emoji,omitempty"`
+	External *struct {
+		URL string `json:"url"`
+	} `json:"external,omitempty"`
+	File *struct {
+		URL string `json:"url"`
+	} `json:"file,omitempty"`
+}
+
+type PageParent struct {
+	Type       string `json:"type"`
+	PageID     string `json:"page_id,omitempty"`
+	DatabaseID string `json:"database_id,omitempty"`
+	BlockID    string `json:"block_id,omitempty"`
+	Workspace  bool   `json:"workspace,omitempty"`
+}
+
 type Block struct {
 	ID        string          `json:"id"`
 	Object    string          `json:"object"`
@@ -119,6 +158,23 @@ func (c *Client) GetPageMarkdown(ctx context.Context, pageID string) (*PageMarkd
 
 	var out PageMarkdown
 	if err := c.doJSON(ctx, http.MethodGet, "/pages/"+pageID+"/markdown", nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// GetPageMetadata retrieves page metadata (timestamps, authors, parent, icon,
+// archived state) via the Notion REST API. The MCP tool notion-fetch does not
+// expose these fields, so this method is used to enrich page view output when
+// an official API token is configured.
+func (c *Client) GetPageMetadata(ctx context.Context, pageID string) (*PageMetadata, error) {
+	pageID = strings.TrimSpace(pageID)
+	if pageID == "" {
+		return nil, fmt.Errorf("page ID is required")
+	}
+
+	var out PageMetadata
+	if err := c.doJSON(ctx, http.MethodGet, "/pages/"+pageID, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil

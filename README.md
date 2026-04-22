@@ -108,6 +108,8 @@ The `<page>` argument accepts a URL, ID, or page name.
 
 `page view` shows open page-level comments and inline block discussions by default. Inline discussions are rendered in context, with the anchor text wrapped in `[[...]]` and the discussion shown immediately below it. Use `--no-comments` to suppress comments, `--raw` to inspect the original Notion markup, and `--json` to return the page plus a `Comments` array.
 
+When `--json` is used and an official API token is configured (via `auth api setup` or `NOTION_API_TOKEN`), the output is enriched with metadata that MCP does not expose: `CreatedTime`, `LastEditedTime`, `CreatedBy`, `LastEditedBy`, `ParentType`, `ParentID`, `Archived`, and `Icon`. Without a token, these fields remain empty and the command behaves as before.
+
 ### Search
 
 ```bash

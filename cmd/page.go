@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/lox/notion-cli/internal/api"
 	"github.com/lox/notion-cli/internal/cli"
 	"github.com/lox/notion-cli/internal/mcp"
 	"github.com/lox/notion-cli/internal/output"
@@ -26,6 +27,7 @@ type PageCmd struct {
 var loadPageViewCommentsFn = loadPageViewComments
 var printViewedPageFn = output.PrintViewedPage
 var printWarningFn = output.PrintWarning
+var loadPageMetadataFn = loadPageMetadata
 
 type PageListCmd struct {
 	Query string `help:"Filter pages by name" short:"q"`
@@ -134,6 +136,9 @@ func renderFetchedPageView(bgCtx context.Context, ctx *Context, client *mcp.Clie
 	}
 
 	if ctx.JSON {
+		if meta := loadPageMetadataFn(bgCtx, ctx, fetchID); meta != nil {
+			applyPageMetadata(&pageOutput, meta)
+		}
 		return printViewedPageFn(pageOutput, comments, true)
 	}
 
@@ -685,4 +690,72 @@ func runPageSync(ctx *Context, file, title, parent, parentDB, icon string) error
 		output.PrintInfo(resp.URL)
 	}
 	return nil
+}
+
+// loadPageMetadata fetches page metadata (timestamps, authors, parent, icon)
+// via the official REST API when an API token is configured. The MCP
+// notion-fetch tool does not expose these fields, so this is a best-effort
+// enrichment for JSON output. Any failure (missing token, API error) is
+// silently ignored and the page view falls back to MCP-only data.
+func loadPageMetadata(ctx context.Context, cmdCtx *Context, pageID string) *api.PageMetadata {
+	apiClient, err := cli.RequireOfficialAPIClient(officialAPIOverrides(cmdCtx))
+	if err != nil {
+		return nil
+	}
+	meta, err := apiClient.GetPageMetadata(ctx, pageID)
+	if err != nil {
+		return nil
+	}
+	return meta
+}
+
+// applyPageMetadata merges metadata from the official API into an output.Page
+// built from the MCP fetch result. Fields already populated by MCP (ID, Title,
+// URL, Content) are preserved; only the metadata-only fields are enriched.
+func applyPageMetadata(p *output.Page, meta *api.PageMetadata) {
+	if meta == nil {
+		return
+	}
+	p.CreatedTime = meta.CreatedTime
+	p.LastEditedTime = meta.LastEditedTime
+	p.CreatedBy = meta.CreatedBy.ID
+	p.LastEditedBy = meta.LastEditedBy.ID
+	p.Archived = meta.Archived || meta.InTrash
+	p.ParentType, p.ParentID = parentFromMetadata(meta.Parent)
+	if icon := iconFromMetadata(meta.Icon); icon != "" {
+		p.Icon = icon
+	}
+}
+
+func parentFromMetadata(parent api.PageParent) (parentType, parentID string) {
+	switch parent.Type {
+	case "page_id":
+		return "page", parent.PageID
+	case "database_id":
+		return "database", parent.DatabaseID
+	case "block_id":
+		return "block", parent.BlockID
+	case "workspace":
+		return "workspace", ""
+	}
+	return parent.Type, ""
+}
+
+func iconFromMetadata(icon *api.PageIcon) string {
+	if icon == nil {
+		return ""
+	}
+	switch icon.Type {
+	case "emoji":
+		return icon.Emoji
+	case "external":
+		if icon.External != nil {
+			return icon.External.URL
+		}
+	case "file":
+		if icon.File != nil {
+			return icon.File.URL
+		}
+	}
+	return ""
 }

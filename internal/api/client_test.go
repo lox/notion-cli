@@ -240,3 +240,64 @@ func TestTrashPageUsesPatch(t *testing.T) {
 		t.Fatalf("TrashPage: %v", err)
 	}
 }
+
+func TestGetPageMetadataParsesResponse(t *testing.T) {
+	body := `{
+		"object": "page",
+		"id": "page_123",
+		"created_time": "2025-01-02T03:04:05.000Z",
+		"last_edited_time": "2025-06-07T08:09:10.000Z",
+		"created_by": {"object": "user", "id": "user_creator"},
+		"last_edited_by": {"object": "user", "id": "user_editor"},
+		"archived": false,
+		"in_trash": false,
+		"icon": {"type": "emoji", "emoji": "📝"},
+		"parent": {"type": "database_id", "database_id": "db_parent"},
+		"url": "https://www.notion.so/page_123"
+	}`
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/v1/pages/page_123" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		if r.Header.Get("Authorization") != "Bearer secret-token" {
+			t.Fatalf("missing/invalid auth header: %q", r.Header.Get("Authorization"))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(body))
+	}))
+	defer srv.Close()
+
+	client, err := NewClient(config.APIConfig{BaseURL: srv.URL + "/v1"}, "secret-token")
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	meta, err := client.GetPageMetadata(context.Background(), "page_123")
+	if err != nil {
+		t.Fatalf("GetPageMetadata: %v", err)
+	}
+	if meta.ID != "page_123" {
+		t.Fatalf("ID = %q", meta.ID)
+	}
+	if meta.CreatedBy.ID != "user_creator" || meta.LastEditedBy.ID != "user_editor" {
+		t.Fatalf("authors not parsed: %+v / %+v", meta.CreatedBy, meta.LastEditedBy)
+	}
+	if meta.Parent.Type != "database_id" || meta.Parent.DatabaseID != "db_parent" {
+		t.Fatalf("parent not parsed: %+v", meta.Parent)
+	}
+	if meta.Icon == nil || meta.Icon.Type != "emoji" || meta.Icon.Emoji != "📝" {
+		t.Fatalf("icon not parsed: %+v", meta.Icon)
+	}
+}
+
+func TestGetPageMetadataRequiresPageID(t *testing.T) {
+	client, err := NewClient(config.APIConfig{BaseURL: "https://example.invalid/v1"}, "secret-token")
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	if _, err := client.GetPageMetadata(context.Background(), "   "); err == nil {
+		t.Fatal("expected error for blank page id")
+	}
+}

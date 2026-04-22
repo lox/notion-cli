@@ -8,6 +8,8 @@ type Page struct {
 	URL            string
 	CreatedTime    time.Time
 	LastEditedTime time.Time
+	CreatedBy      string
+	LastEditedBy   string
 	ParentType     string
 	ParentID       string
 	Archived       bool
