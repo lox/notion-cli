@@ -26,6 +26,7 @@ type PageCmd struct {
 var loadPageViewCommentsFn = loadPageViewComments
 var printViewedPageFn = output.PrintViewedPage
 var printWarningFn = output.PrintWarning
+var requirePageClientFn = cli.RequireClient
 
 type PageListCmd struct {
 	Query string `help:"Filter pages by name" short:"q"`
@@ -568,6 +569,12 @@ func runPageSync(ctx *Context, file, title, parent, parentDB, icon string, skipL
 	var localUploads []uploadedLocalImage
 	var snapshot *api.PageMarkdown
 	var resolvedParentPageID, resolvedParentDatabaseID string
+	var client *mcp.Client
+	defer func() {
+		if client != nil {
+			_ = client.Close()
+		}
+	}()
 	if skipLocalImages {
 		body, err = stripLocalImages(body)
 		if err != nil {
@@ -594,6 +601,11 @@ func runPageSync(ctx *Context, file, title, parent, parentDB, icon string, skipL
 		}
 
 		if hasLocalImages && fm.NotionID != "" {
+			client, err = requirePageClientFn()
+			if err != nil {
+				return err
+			}
+
 			apiClient, err := cli.RequireOfficialAPIClient(officialAPIOverrides(ctx))
 			if err != nil {
 				output.PrintError(err)
@@ -619,34 +631,30 @@ func runPageSync(ctx *Context, file, title, parent, parentDB, icon string, skipL
 		// For the create path, resolve parent IDs before any uploads so an
 		// invalid --parent/--parent-db doesn't leave orphaned file uploads.
 		if hasLocalImages && fm.NotionID == "" {
-			resolveClient, err := cli.RequireClient()
+			client, err = requirePageClientFn()
 			if err != nil {
 				return err
 			}
 			if parentDB != "" {
-				dbID, err := cli.ResolveDatabaseID(bgCtx, resolveClient, parentDB)
+				dbID, err := cli.ResolveDatabaseID(bgCtx, client, parentDB)
 				if err != nil {
-					_ = resolveClient.Close()
 					output.PrintError(err)
 					return err
 				}
-				dbID, err = resolveClient.ResolveDataSourceID(bgCtx, dbID)
+				dbID, err = client.ResolveDataSourceID(bgCtx, dbID)
 				if err != nil {
-					_ = resolveClient.Close()
 					output.PrintError(err)
 					return err
 				}
 				resolvedParentDatabaseID = dbID
 			} else if parent != "" {
-				parentID, err := cli.ResolvePageID(bgCtx, resolveClient, parent)
+				parentID, err := cli.ResolvePageID(bgCtx, client, parent)
 				if err != nil {
-					_ = resolveClient.Close()
 					output.PrintError(err)
 					return err
 				}
 				resolvedParentPageID = parentID
 			}
-			_ = resolveClient.Close()
 		}
 
 		body, localUploads, err = prepareLocalImageUploads(ctx, bgCtx, file, body)
@@ -666,11 +674,12 @@ func runPageSync(ctx *Context, file, title, parent, parentDB, icon string, skipL
 		icon, title = extractEmojiFromTitle(title)
 	}
 
-	client, err := cli.RequireClient()
-	if err != nil {
-		return err
+	if client == nil {
+		client, err = requirePageClientFn()
+		if err != nil {
+			return err
+		}
 	}
-	defer func() { _ = client.Close() }()
 
 	if fm.NotionID != "" {
 		req := mcp.UpdatePageRequest{

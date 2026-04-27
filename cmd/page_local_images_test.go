@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -73,6 +74,54 @@ func TestPrepareLocalImageUploadsUploadsAndDeduplicates(t *testing.T) {
 	}
 	if !strings.Contains(rewritten, uploads[0].Placeholder) || !strings.Contains(rewritten, uploads[1].Placeholder) {
 		t.Fatalf("rewritten markdown missing placeholders: %q", rewritten)
+	}
+}
+
+func TestRunPageSyncPreflightsMCPBeforeLocalImageUpload(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	tmp := t.TempDir()
+	doc := filepath.Join(tmp, "doc.md")
+	img := filepath.Join(tmp, "diagram.png")
+	if err := os.WriteFile(img, []byte("PNGDATA"), 0o644); err != nil {
+		t.Fatalf("WriteFile image: %v", err)
+	}
+	if err := os.WriteFile(doc, []byte("---\nnotion-id: page_123\n---\n\n![Diagram](./diagram.png)\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile doc: %v", err)
+	}
+
+	uploadCalls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/pages/page_123/markdown":
+			_, _ = w.Write([]byte(`{"markdown":"# Previous\n","truncated":false}`))
+		case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/v1/file_uploads"):
+			uploadCalls++
+			http.Error(w, "upload should not start before MCP auth", http.StatusInternalServerError)
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer srv.Close()
+
+	wantErr := errors.New("mcp unavailable")
+	oldRequirePageClientFn := requirePageClientFn
+	requirePageClientFn = func() (*mcp.Client, error) {
+		return nil, wantErr
+	}
+	t.Cleanup(func() {
+		requirePageClientFn = oldRequirePageClientFn
+	})
+
+	err := runPageSync(&Context{
+		APIToken:   "secret-token",
+		APIBaseURL: srv.URL + "/v1",
+	}, doc, "", "", "", "", false)
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("runPageSync error = %v, want %v", err, wantErr)
+	}
+	if uploadCalls != 0 {
+		t.Fatalf("uploadCalls = %d, want 0", uploadCalls)
 	}
 }
 
