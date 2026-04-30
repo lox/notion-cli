@@ -28,7 +28,7 @@ func (c *DBListCmd) Run(ctx *Context) error {
 }
 
 func runDBList(ctx *Context, query string, limit int) error {
-	client, err := cli.RequireClient()
+	client, err := cli.RequireClient(ctx.Profile)
 	if err != nil {
 		return err
 	}
@@ -98,7 +98,7 @@ func runDBCreate(ctx *Context, database, title string, props []string, content, 
 		content = string(data)
 	}
 
-	client, err := cli.RequireClient()
+	client, err := cli.RequireClient(ctx.Profile)
 	if err != nil {
 		return err
 	}
@@ -159,7 +159,7 @@ func runDBCreate(ctx *Context, database, title string, props []string, content, 
 }
 
 func runDBQuery(ctx *Context, id string) error {
-	client, err := cli.RequireClient()
+	client, err := cli.RequireClient(ctx.Profile)
 	if err != nil {
 		return err
 	}

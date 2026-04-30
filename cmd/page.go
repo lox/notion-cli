@@ -41,7 +41,7 @@ func (c *PageListCmd) Run(ctx *Context) error {
 }
 
 func runPageList(ctx *Context, query string, limit int) error {
-	client, err := cli.RequireClient()
+	client, err := cli.RequireClient(ctx.Profile)
 	if err != nil {
 		return err
 	}
@@ -90,7 +90,7 @@ func (c *PageViewCmd) Run(ctx *Context) error {
 }
 
 func runPageView(ctx *Context, page string, raw, includeComments bool) error {
-	client, err := cli.RequireClient()
+	client, err := cli.RequireClient(ctx.Profile)
 	if err != nil {
 		return err
 	}
@@ -204,7 +204,7 @@ func (c *PageCreateCmd) Run(ctx *Context) error {
 }
 
 func runPageCreate(ctx *Context, title, parent, content string) error {
-	client, err := cli.RequireClient()
+	client, err := cli.RequireClient(ctx.Profile)
 	if err != nil {
 		return err
 	}
@@ -288,7 +288,7 @@ func runPageUpload(ctx *Context, file, title, parent, parentDB, icon string, ski
 		}
 	}
 
-	client, err := cli.RequireClient()
+	client, err := cli.RequireClient(ctx.Profile)
 	if err != nil {
 		return err
 	}
@@ -430,7 +430,7 @@ func runPageArchive(ctx *Context, page string) error {
 		return err
 	}
 
-	apiClient, err := cli.RequireOfficialAPIClient(officialAPIOverrides(ctx))
+	apiClient, err := cli.RequireOfficialAPIClient(ctx.Profile, officialAPIOverrides(ctx))
 	if err != nil {
 		output.PrintError(err)
 		return err
@@ -446,7 +446,7 @@ func runPageArchive(ctx *Context, page string) error {
 }
 
 func runPageEdit(ctx *Context, page, replace, find, replaceWith, appendText string, props []string, allowDeletingContent bool) error {
-	client, err := cli.RequireClient()
+	client, err := cli.RequireClient(ctx.Profile)
 	if err != nil {
 		return err
 	}
@@ -707,7 +707,7 @@ func runPageSync(ctx *Context, file, title, parent, parentDB, icon string, skipL
 	}
 
 	if client == nil {
-		client, err = requirePageClientFn()
+		client, err = requirePageClientFn(ctx.Profile)
 		if err != nil {
 			return err
 		}

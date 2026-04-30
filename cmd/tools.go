@@ -23,7 +23,7 @@ type toolSummary struct {
 func (c *ToolsCmd) Run(ctx *Context) error {
 	ctx.JSON = c.JSON
 
-	client, err := cli.RequireClient()
+	client, err := cli.RequireClient(ctx.Profile)
 	if err != nil {
 		return err
 	}

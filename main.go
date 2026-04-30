@@ -42,8 +42,7 @@ func main() {
 		// Headless path: NOTION_ACCESS_TOKEN authenticates MCP directly, so
 		// the profile gate can be skipped. Profile-scoped operations (like
 		// auth api setup) will still use the implicit default layout.
-	} else {
-		cli.SetActiveProfile(active)
+		active = profile.Profile{Name: profile.DefaultName, Source: profile.SourceDefault}
 	}
 	cli.SetAccessToken(c.Token)
 
@@ -52,7 +51,7 @@ func main() {
 		APIToken:         c.APIToken,
 		APIBaseURL:       c.APIBaseURL,
 		APINotionVersion: c.APINotionVersion,
-		Profile:          cli.ActiveProfile(),
+		Profile:          active,
 	})
 	ctx.FatalIfErrorf(runErr)
 	os.Exit(0)

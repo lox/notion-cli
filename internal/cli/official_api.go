@@ -5,6 +5,7 @@ import (
 
 	"github.com/lox/notion-cli/internal/api"
 	"github.com/lox/notion-cli/internal/config"
+	"github.com/lox/notion-cli/internal/profile"
 )
 
 type OfficialAPIConfig struct {
@@ -14,8 +15,8 @@ type OfficialAPIConfig struct {
 	HasConfigToken bool
 }
 
-func LoadOfficialAPIConfig(overrides config.APIOverrides) (*OfficialAPIConfig, error) {
-	loaded, err := config.LoadWithMetaForProfile(ActiveProfile(), overrides)
+func LoadOfficialAPIConfig(p profile.Profile, overrides config.APIOverrides) (*OfficialAPIConfig, error) {
+	loaded, err := config.LoadWithMetaForProfile(p, overrides)
 	if err != nil {
 		return nil, fmt.Errorf("load config: %w", err)
 	}
@@ -27,8 +28,8 @@ func LoadOfficialAPIConfig(overrides config.APIOverrides) (*OfficialAPIConfig, e
 	}, nil
 }
 
-func RequireOfficialAPIClient(overrides config.APIOverrides) (*api.Client, error) {
-	loaded, err := LoadOfficialAPIConfig(overrides)
+func RequireOfficialAPIClient(p profile.Profile, overrides config.APIOverrides) (*api.Client, error) {
+	loaded, err := LoadOfficialAPIConfig(p, overrides)
 	if err != nil {
 		return nil, err
 	}

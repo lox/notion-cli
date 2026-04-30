@@ -37,7 +37,7 @@ const officialAPIIntegrationsURL = "https://www.notion.so/profile/integrations/i
 type AuthLoginCmd struct{}
 
 func (c *AuthLoginCmd) Run(ctx *Context) error {
-	tokenStore, err := mcp.NewFileTokenStoreForProfile(cli.ActiveProfile())
+	tokenStore, err := mcp.NewFileTokenStoreForProfile(ctx.Profile)
 	if err != nil {
 		output.PrintError(err)
 		return err
@@ -55,7 +55,7 @@ func (c *AuthLoginCmd) Run(ctx *Context) error {
 type AuthRefreshCmd struct{}
 
 func (c *AuthRefreshCmd) Run(ctx *Context) error {
-	tokenStore, err := mcp.NewFileTokenStoreForProfile(cli.ActiveProfile())
+	tokenStore, err := mcp.NewFileTokenStoreForProfile(ctx.Profile)
 	if err != nil {
 		output.PrintError(err)
 		return err
@@ -95,7 +95,7 @@ type AuthStatusCmd struct {
 func (c *AuthStatusCmd) Run(ctx *Context) error {
 	ctx.JSON = c.JSON
 
-	tokenStore, err := mcp.NewFileTokenStoreForProfile(cli.ActiveProfile())
+	tokenStore, err := mcp.NewFileTokenStoreForProfile(ctx.Profile)
 	if err != nil {
 		output.PrintError(err)
 		return err
@@ -112,7 +112,7 @@ func (c *AuthStatusCmd) Run(ctx *Context) error {
 	}
 
 	hasValidToken := token.AccessToken != "" && !token.IsExpired()
-	activeProfile := cli.ActiveProfile()
+	activeProfile := ctx.Profile
 
 	if ctx.JSON {
 		enc := json.NewEncoder(os.Stdout)
@@ -157,7 +157,7 @@ func (c *AuthStatusCmd) Run(ctx *Context) error {
 type AuthLogoutCmd struct{}
 
 func (c *AuthLogoutCmd) Run(ctx *Context) error {
-	tokenStore, err := mcp.NewFileTokenStoreForProfile(cli.ActiveProfile())
+	tokenStore, err := mcp.NewFileTokenStoreForProfile(ctx.Profile)
 	if err != nil {
 		output.PrintError(err)
 		return err
@@ -196,13 +196,13 @@ func (c *AuthAPISetupCmd) Run(ctx *Context) error {
 		output.PrintWarning("Official API token does not match the expected Notion token format")
 		_, _ = fmt.Fprintln(authAPIOutput, "Expected format: ntn_<letters-and-numbers>")
 	}
-	if err := config.SetAPITokenForProfile(cli.ActiveProfile(), token); err != nil {
+	if err := config.SetAPITokenForProfile(ctx.Profile, token); err != nil {
 		output.PrintError(err)
 		return err
 	}
 
 	output.PrintSuccess("Official API token saved")
-	_, _ = fmt.Fprintf(authAPIOutput, "Config path: %s\n", mustConfigPath())
+	_, _ = fmt.Fprintf(authAPIOutput, "Config path: %s\n", mustConfigPath(ctx))
 	return nil
 }
 
@@ -213,7 +213,7 @@ type AuthAPIStatusCmd struct {
 func (c *AuthAPIStatusCmd) Run(ctx *Context) error {
 	ctx.JSON = c.JSON
 
-	loaded, err := cli.LoadOfficialAPIConfig(officialAPIOverrides(ctx))
+	loaded, err := cli.LoadOfficialAPIConfig(ctx.Profile, officialAPIOverrides(ctx))
 	if err != nil {
 		output.PrintError(err)
 		return err
@@ -228,12 +228,12 @@ type AuthAPIVerifyCmd struct {
 func (c *AuthAPIVerifyCmd) Run(ctx *Context) error {
 	ctx.JSON = c.JSON
 
-	loaded, err := cli.LoadOfficialAPIConfig(officialAPIOverrides(ctx))
+	loaded, err := cli.LoadOfficialAPIConfig(ctx.Profile, officialAPIOverrides(ctx))
 	if err != nil {
 		output.PrintError(err)
 		return err
 	}
-	client, err := cli.RequireOfficialAPIClient(officialAPIOverrides(ctx))
+	client, err := cli.RequireOfficialAPIClient(ctx.Profile, officialAPIOverrides(ctx))
 	if err != nil {
 		output.PrintError(err)
 		return err
@@ -275,7 +275,7 @@ func (c *AuthAPIVerifyCmd) Run(ctx *Context) error {
 type AuthAPIUnsetCmd struct{}
 
 func (c *AuthAPIUnsetCmd) Run(ctx *Context) error {
-	loaded, err := cli.LoadOfficialAPIConfig(officialAPIOverrides(ctx))
+	loaded, err := cli.LoadOfficialAPIConfig(ctx.Profile, officialAPIOverrides(ctx))
 	if err != nil {
 		output.PrintError(err)
 		return err
@@ -291,7 +291,7 @@ func (c *AuthAPIUnsetCmd) Run(ctx *Context) error {
 		return nil
 	}
 
-	if err := config.UnsetAPITokenForProfile(cli.ActiveProfile()); err != nil {
+	if err := config.UnsetAPITokenForProfile(ctx.Profile); err != nil {
 		output.PrintError(err)
 		return err
 	}
@@ -380,8 +380,8 @@ func printOfficialAPITokenSetupHint(out io.Writer, shouldOpenBrowser bool) {
 	_, _ = fmt.Fprintln(out)
 }
 
-func mustConfigPath() string {
-	path, err := config.PathFor(cli.ActiveProfile())
+func mustConfigPath(ctx *Context) string {
+	path, err := config.PathFor(ctx.Profile)
 	if err != nil {
 		return "<unknown>"
 	}

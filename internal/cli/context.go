@@ -9,6 +9,7 @@ import (
 
 	"github.com/lox/notion-cli/internal/mcp"
 	"github.com/lox/notion-cli/internal/output"
+	"github.com/lox/notion-cli/internal/profile"
 )
 
 var accessToken string
@@ -18,18 +19,18 @@ func SetAccessToken(token string) {
 	accessToken = token
 }
 
-func GetClient() (*mcp.Client, error) {
+func GetClient(p profile.Profile) (*mcp.Client, error) {
 	ctx := context.Background()
 
 	// Auto-refresh if token is expired or expiring soon
 	if accessToken == "" {
-		if err := autoRefreshIfNeeded(ctx); err != nil {
+		if err := autoRefreshIfNeeded(ctx, p); err != nil {
 			// Non-fatal, but surface guidance to reduce auth-related command failures.
 			printAuthRefreshGuidance(err)
 		}
 	}
 
-	opts := []mcp.ClientOption{mcp.WithProfile(ActiveProfile())}
+	opts := []mcp.ClientOption{mcp.WithProfile(p)}
 	if accessToken != "" {
 		opts = append(opts, mcp.WithAccessToken(accessToken))
 	}
@@ -50,8 +51,8 @@ func GetClient() (*mcp.Client, error) {
 	return client, nil
 }
 
-func autoRefreshIfNeeded(ctx context.Context) error {
-	tokenStore, err := mcp.NewFileTokenStoreForProfile(ActiveProfile())
+func autoRefreshIfNeeded(ctx context.Context, p profile.Profile) error {
+	tokenStore, err := mcp.NewFileTokenStoreForProfile(p)
 	if err != nil {
 		return err
 	}
@@ -76,8 +77,8 @@ func autoRefreshIfNeeded(ctx context.Context) error {
 	return nil
 }
 
-func RequireClient() (*mcp.Client, error) {
-	return GetClient()
+func RequireClient(p profile.Profile) (*mcp.Client, error) {
+	return GetClient(p)
 }
 
 func printAuthRefreshGuidance(err error) {
