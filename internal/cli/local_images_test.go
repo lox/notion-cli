@@ -499,6 +499,62 @@ func TestFindStandaloneLocalImageLinesHonorsBlockquoteIndentLimit(t *testing.T) 
 	}
 }
 
+func TestFindStandaloneLocalImageLinesIgnoresRawHTMLBlock(t *testing.T) {
+	markdown := strings.Join([]string{
+		"<div>",
+		"![Demo](./example.png)",
+		"</div>",
+		"",
+		"![Real](./real.png)",
+		"",
+	}, "\n")
+
+	rewritten, placements, err := FindStandaloneLocalImageLines(markdown)
+	if err != nil {
+		t.Fatalf("FindStandaloneLocalImageLines: %v", err)
+	}
+	if len(placements) != 1 {
+		t.Fatalf("len(placements) = %d, want 1", len(placements))
+	}
+	if !strings.Contains(rewritten, "![Demo](./example.png)") {
+		t.Fatalf("rewritten lost raw HTML image syntax: %q", rewritten)
+	}
+	if strings.Contains(rewritten, "![Real](./real.png)") {
+		t.Fatalf("rewritten should have replaced the real image line: %q", rewritten)
+	}
+}
+
+func TestRewriteStandaloneLocalImagesIgnoresMissingImageInRawHTMLBlock(t *testing.T) {
+	dir := t.TempDir()
+	source := filepath.Join(dir, "doc.md")
+	real := filepath.Join(dir, "real.png")
+	if err := os.WriteFile(source, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(real, []byte("image"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	markdown := strings.Join([]string{
+		"<div>",
+		"![Missing](./missing.png)",
+		"</div>",
+		"",
+		"![Real](./real.png)",
+		"",
+	}, "\n")
+
+	_, placements, err := RewriteStandaloneLocalImages(markdown, source)
+	if err != nil {
+		t.Fatalf("RewriteStandaloneLocalImages: %v", err)
+	}
+	if len(placements) != 1 {
+		t.Fatalf("len(placements) = %d, want 1", len(placements))
+	}
+	if placements[0].Resolved != real {
+		t.Fatalf("Resolved = %q, want %q", placements[0].Resolved, real)
+	}
+}
+
 func TestIsLocalDestinationHandlesWindowsAndURISchemes(t *testing.T) {
 	cases := []struct {
 		name string

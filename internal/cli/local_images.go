@@ -55,12 +55,12 @@ func FindStandaloneLocalImageLines(markdown string) (string, []LocalImagePlaceme
 }
 
 // scanStandaloneLocalImages walks markdown line-by-line, skipping fenced and
-// indented code blocks, rejecting inline local images, and replacing each
-// standalone local image line with a placeholder. When resolvePath is non-nil,
-// it is invoked for every local destination and its returned path is stored on
-// the placement's Resolved field; a non-nil error from resolvePath aborts the
-// scan. When resolvePath is nil, placements are recorded without a Resolved
-// path.
+// indented code blocks and raw HTML blocks, rejecting inline local images, and
+// replacing each standalone local image line with a placeholder. When
+// resolvePath is non-nil, it is invoked for every local destination and its
+// returned path is stored on the placement's Resolved field; a non-nil error
+// from resolvePath aborts the scan. When resolvePath is nil, placements are
+// recorded without a Resolved path.
 func scanStandaloneLocalImages(markdown string, resolvePath func(dest string) (string, error)) (string, []LocalImagePlacement, error) {
 	normalizedMarkdown := strings.NewReplacer("\r\n", "\n", "\r", "\n").Replace(markdown)
 	lines := strings.Split(normalizedMarkdown, "\n")
@@ -70,11 +70,19 @@ func scanStandaloneLocalImages(markdown string, resolvePath func(dest string) (s
 	var fenceChar byte
 	var fenceLen int
 	var inIndented bool
+	var htmlEnd htmlBlockEnd
 	prevBlank := true
 
 	for i, line := range lines {
 		isBlank := strings.TrimSpace(line) == ""
 
+		if htmlEnd != htmlBlockEndNone {
+			if closesHTMLBlock(line, htmlEnd) {
+				htmlEnd = htmlBlockEndNone
+			}
+			prevBlank = isBlank
+			continue
+		}
 		if inFence {
 			if closesFencedCodeBlock(line, fenceChar, fenceLen) {
 				inFence = false
@@ -87,6 +95,13 @@ func scanStandaloneLocalImages(markdown string, resolvePath func(dest string) (s
 			fenceChar = c
 			fenceLen = n
 			prevBlank = false
+			continue
+		}
+		if end := opensHTMLBlock(line); end != htmlBlockEndNone {
+			if !closesHTMLBlock(line, end) {
+				htmlEnd = end
+			}
+			prevBlank = isBlank
 			continue
 		}
 		// Blockquotes typically hold documentation, examples, or quoted
@@ -407,9 +422,118 @@ func isBlockquoteLine(line string) bool {
 	return i < len(line) && line[i] == '>'
 }
 
+type htmlBlockEnd int
+
+const (
+	htmlBlockEndNone htmlBlockEnd = iota
+	htmlBlockEndBlank
+	htmlBlockEndComment
+	htmlBlockEndProcessingInstruction
+	htmlBlockEndDeclaration
+	htmlBlockEndCDATA
+	htmlBlockEndScript
+	htmlBlockEndPre
+	htmlBlockEndStyle
+)
+
+func opensHTMLBlock(line string) htmlBlockEnd {
+	trimmed := trimMarkdownBlockStart(line)
+	lower := strings.ToLower(trimmed)
+	switch {
+	case strings.HasPrefix(lower, "<script"), strings.HasPrefix(lower, "</script"):
+		return htmlBlockEndScript
+	case strings.HasPrefix(lower, "<pre"), strings.HasPrefix(lower, "</pre"):
+		return htmlBlockEndPre
+	case strings.HasPrefix(lower, "<style"), strings.HasPrefix(lower, "</style"):
+		return htmlBlockEndStyle
+	case strings.HasPrefix(trimmed, "<!--"):
+		return htmlBlockEndComment
+	case strings.HasPrefix(trimmed, "<?"):
+		return htmlBlockEndProcessingInstruction
+	case strings.HasPrefix(trimmed, "<![CDATA["):
+		return htmlBlockEndCDATA
+	case strings.HasPrefix(trimmed, "<!"):
+		return htmlBlockEndDeclaration
+	case startsBlockHTMLTag(trimmed):
+		return htmlBlockEndBlank
+	default:
+		return htmlBlockEndNone
+	}
+}
+
+func closesHTMLBlock(line string, end htmlBlockEnd) bool {
+	lower := strings.ToLower(line)
+	switch end {
+	case htmlBlockEndBlank:
+		return strings.TrimSpace(line) == ""
+	case htmlBlockEndComment:
+		return strings.Contains(line, "-->")
+	case htmlBlockEndProcessingInstruction:
+		return strings.Contains(line, "?>")
+	case htmlBlockEndDeclaration:
+		return strings.Contains(line, ">")
+	case htmlBlockEndCDATA:
+		return strings.Contains(line, "]]>")
+	case htmlBlockEndScript:
+		return strings.Contains(lower, "</script>")
+	case htmlBlockEndPre:
+		return strings.Contains(lower, "</pre>")
+	case htmlBlockEndStyle:
+		return strings.Contains(lower, "</style>")
+	default:
+		return true
+	}
+}
+
+func trimMarkdownBlockStart(line string) string {
+	i := 0
+	for i < len(line) && i < 3 && line[i] == ' ' {
+		i++
+	}
+	return strings.TrimSpace(line[i:])
+}
+
+func startsBlockHTMLTag(s string) bool {
+	if !strings.HasPrefix(s, "<") {
+		return false
+	}
+	nameStart := 1
+	if len(s) > 1 && s[1] == '/' {
+		nameStart = 2
+	}
+	nameEnd := nameStart
+	for nameEnd < len(s) && isHTMLTagNameByte(s[nameEnd]) {
+		nameEnd++
+	}
+	if nameEnd == nameStart {
+		return false
+	}
+	if nameEnd >= len(s) {
+		return false
+	}
+	next := s[nameEnd]
+	if next != ' ' && next != '\t' && next != '>' && next != '/' {
+		return false
+	}
+	return isBlockHTMLTag(strings.ToLower(s[nameStart:nameEnd]))
+}
+
+func isHTMLTagNameByte(b byte) bool {
+	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9') || b == '-'
+}
+
+func isBlockHTMLTag(name string) bool {
+	switch name {
+	case "address", "article", "aside", "base", "basefont", "blockquote", "body", "caption", "center", "col", "colgroup", "dd", "details", "dialog", "dir", "div", "dl", "dt", "fieldset", "figcaption", "figure", "footer", "form", "frame", "frameset", "h1", "h2", "h3", "h4", "h5", "h6", "head", "header", "hr", "html", "iframe", "legend", "li", "link", "main", "menu", "menuitem", "nav", "noframes", "ol", "optgroup", "option", "p", "param", "search", "section", "summary", "table", "tbody", "td", "tfoot", "th", "thead", "title", "tr", "track", "ul":
+		return true
+	default:
+		return false
+	}
+}
+
 // opensFencedCodeBlock reports whether `line` opens a CommonMark fenced code
-// block. It returns the fence character (`` ` `` or `~`) and the fence length
-// (>= 3) on a match, and (0, 0) otherwise.
+// block. It returns the fence character (backtick or `~`) and the fence
+// length (>= 3) on a match, and (0, 0) otherwise.
 func opensFencedCodeBlock(line string) (byte, int) {
 	i := 0
 	for i < len(line) && i < 4 && line[i] == ' ' {
