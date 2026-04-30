@@ -87,12 +87,16 @@ notion-cli page upload ./document.md --title "Custom Title" # Explicit title
 notion-cli page upload ./document.md --parent "Engineering" # Parent by name or ID
 notion-cli page upload ./document.md --parent-db <db-id>    # Upload as database entry
 notion-cli page upload ./document.md --icon "📄"             # Set emoji icon
+notion-cli page upload ./document.md                        # Uploads standalone local images when configured
+notion-cli page upload ./document.md --skip-local-images    # Strips standalone local image lines instead
 
 # Sync a markdown file (create or update)
 notion-cli page sync ./document.md                          # Creates page, writes notion-id to frontmatter
 notion-cli page sync ./document.md                          # Updates page using notion-id from frontmatter
 notion-cli page sync ./document.md --parent "Engineering"   # Set parent on first sync
 notion-cli page sync ./document.md --parent-db <db-id>      # Sync as database entry
+notion-cli page sync ./document.md                          # Uploads standalone local images when configured
+notion-cli page sync ./document.md --skip-local-images      # Strips standalone local image lines instead
 
 # Edit an existing page
 notion-cli page edit <page> --replace "New content"                      # Replace all content
@@ -107,6 +111,8 @@ The `<page>` argument accepts a URL, ID, or page name.
 `page archive` accepts a page URL or page ID and moves that page to trash via the official API. This requires an official API token configured through `auth api setup` or `NOTION_API_TOKEN`.
 
 `page view` shows open page-level comments and inline block discussions by default. Inline discussions are rendered in context, with the anchor text wrapped in `[[...]]` and the discussion shown immediately below it. Use `--no-comments` to suppress comments, `--raw` to inspect the original Notion markup, and `--json` to return the page plus a `Comments` array.
+
+`page upload` and `page sync` support native local image upload for standalone markdown image lines like `![Alt](./diagram.png)`. When local images are present, `notion-cli` uploads those files through the official Notion API and keeps them in document order. This requires an official API token configured through `auth api setup` or `NOTION_API_TOKEN`. Pass `--skip-local-images` to silently remove standalone local image lines instead of uploading them. Inline or mixed-content local image syntax is rejected instead of being guessed.
 
 ### Search
 
@@ -173,6 +179,9 @@ The CLI uses Notion's remote MCP server with OAuth authentication. On first run,
 | Variable | Description |
 |----------|-------------|
 | `NOTION_ACCESS_TOKEN` | Access token for CI/headless usage (skips OAuth) |
+| `NOTION_API_TOKEN` | Official Notion API token used for upload fallback and verification |
+| `NOTION_API_BASE_URL` | Override the official Notion API base URL |
+| `NOTION_API_NOTION_VERSION` | Override the official Notion API version |
 
 ## How It Works
 

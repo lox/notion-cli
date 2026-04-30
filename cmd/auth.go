@@ -204,17 +204,6 @@ type AuthAPIStatusCmd struct {
 	JSON bool `help:"Output as JSON" short:"j"`
 }
 
-func officialAPIOverrides(ctx *Context) config.APIOverrides {
-	if ctx == nil {
-		return config.APIOverrides{}
-	}
-	return config.APIOverrides{
-		BaseURL:       ctx.APIBaseURL,
-		NotionVersion: ctx.APINotionVersion,
-		Token:         ctx.APIToken,
-	}
-}
-
 func (c *AuthAPIStatusCmd) Run(ctx *Context) error {
 	ctx.JSON = c.JSON
 

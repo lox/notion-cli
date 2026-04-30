@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"mime"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -59,6 +61,24 @@ func TestUploadFileAndAppendAfter(t *testing.T) {
 			if !strings.HasPrefix(ct, "multipart/form-data;") {
 				t.Fatalf("Content-Type = %q", ct)
 			}
+			mediaType, params, err := mime.ParseMediaType(ct)
+			if err != nil {
+				t.Fatalf("ParseMediaType: %v", err)
+			}
+			if mediaType != "multipart/form-data" {
+				t.Fatalf("mediaType = %q", mediaType)
+			}
+			reader := multipart.NewReader(r.Body, params["boundary"])
+			part, err := reader.NextPart()
+			if err != nil {
+				t.Fatalf("NextPart: %v", err)
+			}
+			if got := part.FileName(); got != `diag"ram.png` {
+				t.Fatalf("part FileName = %q", got)
+			}
+			if got := part.Header.Get("Content-Type"); got != "image/png" {
+				t.Fatalf("part Content-Type = %q", got)
+			}
 			_, _ = w.Write([]byte(`{"id":"upload_123","status":"uploaded"}`))
 		case r.Method == http.MethodGet && r.URL.Path == "/v1/file_uploads/upload_123":
 			getCalls++
@@ -96,7 +116,7 @@ func TestUploadFileAndAppendAfter(t *testing.T) {
 		t.Fatalf("NewClient: %v", err)
 	}
 
-	uploadID, err := client.UploadFile(context.Background(), "diagram.png", []byte("PNGDATA"))
+	uploadID, err := client.UploadFileBytes(context.Background(), `diag"ram.png`, []byte("PNGDATA"))
 	if err != nil {
 		t.Fatalf("UploadFile: %v", err)
 	}
@@ -152,7 +172,7 @@ func TestUploadFileRetriesEmptyAndPendingStatuses(t *testing.T) {
 		t.Fatalf("NewClient: %v", err)
 	}
 
-	uploadID, err := client.UploadFile(context.Background(), "diagram.png", []byte("PNGDATA"))
+	uploadID, err := client.UploadFileBytes(context.Background(), "diagram.png", []byte("PNGDATA"))
 	if err != nil {
 		t.Fatalf("UploadFile: %v", err)
 	}
@@ -238,5 +258,26 @@ func TestTrashPageUsesPatch(t *testing.T) {
 	}
 	if err := client.TrashPage(context.Background(), "page_123"); err != nil {
 		t.Fatalf("TrashPage: %v", err)
+	}
+}
+
+func TestUploadFileRejectsOversizedSinglePart(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+	}))
+	defer srv.Close()
+
+	client, err := NewClient(config.APIConfig{BaseURL: srv.URL + "/v1"}, "secret-token")
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	oversize := int64(SinglePartUploadMaxBytes + 1)
+	_, err = client.UploadFile(context.Background(), "big.png", oversize, strings.NewReader(""))
+	if err == nil {
+		t.Fatalf("UploadFile returned nil error; expected size-limit error")
+	}
+	if !strings.Contains(err.Error(), "single_part upload limit") {
+		t.Fatalf("UploadFile error = %q, want single_part limit message", err.Error())
 	}
 }

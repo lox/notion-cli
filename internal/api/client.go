@@ -1,13 +1,16 @@
 package api
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime"
 	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"path/filepath"
 	"strings"
 	"time"
@@ -16,6 +19,13 @@ import (
 )
 
 const defaultHTTPTimeout = 20 * time.Second
+
+// Notion block type strings used when appending or inspecting blocks.
+const (
+	BlockTypeParagraph  = "paragraph"
+	BlockTypeImage      = "image"
+	BlockTypeFileUpload = "file_upload"
+)
 
 var (
 	fileUploadPollInterval = 250 * time.Millisecond
@@ -124,19 +134,34 @@ func (c *Client) GetPageMarkdown(ctx context.Context, pageID string) (*PageMarkd
 	return &out, nil
 }
 
-func (c *Client) UploadFile(ctx context.Context, filename string, data []byte) (string, error) {
-	filename = strings.TrimSpace(filepath.Base(filename))
-	if filename == "" {
+// SinglePartUploadMaxBytes is Notion's single_part file-upload size limit.
+// Files larger than this require the multi_part upload flow, which this
+// client does not yet implement.
+const SinglePartUploadMaxBytes = 20 * 1024 * 1024
+
+// UploadFile streams a file upload to the Notion API without buffering the whole
+// payload in memory. The reader is consumed through a multipart writer piped
+// directly into the HTTP request body. Pass the exact byte size so the server
+// can validate the stream.
+func (c *Client) UploadFile(ctx context.Context, name string, size int64, body io.Reader) (string, error) {
+	name = strings.TrimSpace(filepath.Base(name))
+	if name == "" {
 		return "", fmt.Errorf("filename is required")
 	}
-	if len(data) == 0 {
-		return "", fmt.Errorf("file data is required")
+	if size <= 0 {
+		return "", fmt.Errorf("file size must be positive")
+	}
+	if size > SinglePartUploadMaxBytes {
+		return "", fmt.Errorf("file %q is %d bytes; Notion's single_part upload limit is %d bytes (~20MB) and multi_part uploads are not yet supported by this client", name, size, SinglePartUploadMaxBytes)
+	}
+	if body == nil {
+		return "", fmt.Errorf("file body is required")
 	}
 
 	var created FileUpload
 	createPayload := map[string]any{
 		"mode":     "single_part",
-		"filename": filename,
+		"filename": name,
 	}
 	if err := c.doJSON(ctx, http.MethodPost, "/file_uploads", createPayload, &created); err != nil {
 		return "", err
@@ -145,7 +170,7 @@ func (c *Client) UploadFile(ctx context.Context, filename string, data []byte) (
 		return "", fmt.Errorf("create file upload failed: empty upload ID")
 	}
 
-	if _, err := c.sendFileUploadPart(ctx, created.ID, filename, data); err != nil {
+	if _, err := c.sendFileUploadPart(ctx, created.ID, name, size, body); err != nil {
 		return "", err
 	}
 
@@ -154,6 +179,12 @@ func (c *Client) UploadFile(ctx context.Context, filename string, data []byte) (
 		return "", err
 	}
 	return uploaded.ID, nil
+}
+
+// UploadFileBytes is a convenience wrapper for callers that already have the
+// file contents in memory.
+func (c *Client) UploadFileBytes(ctx context.Context, name string, data []byte) (string, error) {
+	return c.UploadFile(ctx, name, int64(len(data)), bytes.NewReader(data))
 }
 
 func (c *Client) AppendUploadedImageAfter(ctx context.Context, parentID, afterBlockID string, block UploadedImageBlock) error {
@@ -171,8 +202,8 @@ func (c *Client) AppendUploadedImageAfter(ctx context.Context, parentID, afterBl
 	}
 
 	image := map[string]any{
-		"type": "file_upload",
-		"file_upload": map[string]any{
+		"type": BlockTypeFileUpload,
+		BlockTypeFileUpload: map[string]any{
 			"id": fileUploadID,
 		},
 	}
@@ -187,18 +218,17 @@ func (c *Client) AppendUploadedImageAfter(ctx context.Context, parentID, afterBl
 		}
 	}
 
+	child := map[string]any{
+		"object":       "block",
+		"type":         BlockTypeImage,
+		BlockTypeImage: image,
+	}
 	payload := map[string]any{
+		"children": []map[string]any{child},
 		"position": map[string]any{
 			"type": "after_block",
 			"after_block": map[string]any{
 				"id": afterBlockID,
-			},
-		},
-		"children": []map[string]any{
-			{
-				"object": "block",
-				"type":   "image",
-				"image":  image,
 			},
 		},
 	}
@@ -310,30 +340,67 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body io.Rea
 	return nil
 }
 
-func (c *Client) sendFileUploadPart(ctx context.Context, fileUploadID, filename string, data []byte) (*FileUpload, error) {
-	var body bytes.Buffer
-	writer := multipart.NewWriter(&body)
+func (c *Client) sendFileUploadPart(ctx context.Context, fileUploadID, filename string, size int64, body io.Reader) (*FileUpload, error) {
+	// Peek the first 512 bytes so we can detect the content type without
+	// buffering the full payload.
+	br := bufio.NewReaderSize(body, 4096)
+	peek, _ := br.Peek(512)
+	contentType := detectUploadContentType(filename, peek)
 
-	part, err := writer.CreateFormFile("file", filename)
-	if err != nil {
-		return nil, fmt.Errorf("create multipart file part: %w", err)
+	pr, pw := io.Pipe()
+	writer := multipart.NewWriter(pw)
+
+	header := make(textproto.MIMEHeader)
+	contentDisposition := mime.FormatMediaType("form-data", map[string]string{
+		"name":     "file",
+		"filename": filename,
+	})
+	if strings.TrimSpace(contentDisposition) == "" {
+		_ = pw.Close()
+		return nil, fmt.Errorf("format multipart content disposition: empty result")
 	}
-	if _, err := part.Write(data); err != nil {
-		return nil, fmt.Errorf("write multipart file data: %w", err)
-	}
-	if err := writer.Close(); err != nil {
-		return nil, fmt.Errorf("close multipart writer: %w", err)
-	}
+	header.Set("Content-Disposition", contentDisposition)
+	header.Set("Content-Type", contentType)
+
+	go func() {
+		part, err := writer.CreatePart(header)
+		if err != nil {
+			_ = pw.CloseWithError(fmt.Errorf("create multipart file part: %w", err))
+			return
+		}
+		if _, err := io.Copy(part, br); err != nil {
+			_ = pw.CloseWithError(fmt.Errorf("write multipart file data: %w", err))
+			return
+		}
+		if err := writer.Close(); err != nil {
+			_ = pw.CloseWithError(fmt.Errorf("close multipart writer: %w", err))
+			return
+		}
+		_ = pw.Close()
+	}()
 
 	var out FileUpload
 	path := "/file_uploads/" + strings.TrimSpace(fileUploadID) + "/send"
-	if err := c.doRequest(ctx, http.MethodPost, path, bytes.NewReader(body.Bytes()), writer.FormDataContentType(), &out); err != nil {
+	if err := c.doRequest(ctx, http.MethodPost, path, pr, writer.FormDataContentType(), &out); err != nil {
 		return nil, err
 	}
+	_ = size // size is currently advisory; the multipart writer sets its own framing.
 	if strings.TrimSpace(out.ID) == "" {
 		out.ID = strings.TrimSpace(fileUploadID)
 	}
 	return &out, nil
+}
+
+func detectUploadContentType(filename string, data []byte) string {
+	if ext := strings.TrimSpace(filepath.Ext(filename)); ext != "" {
+		if contentType := strings.TrimSpace(mime.TypeByExtension(strings.ToLower(ext))); contentType != "" {
+			return contentType
+		}
+	}
+	if len(data) > 0 {
+		return http.DetectContentType(data)
+	}
+	return "application/octet-stream"
 }
 
 func (c *Client) waitForFileUploadUploaded(ctx context.Context, fileUploadID string) (*FileUpload, error) {

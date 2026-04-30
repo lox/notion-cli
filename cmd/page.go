@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/lox/notion-cli/internal/api"
 	"github.com/lox/notion-cli/internal/cli"
 	"github.com/lox/notion-cli/internal/mcp"
 	"github.com/lox/notion-cli/internal/output"
@@ -26,6 +27,7 @@ type PageCmd struct {
 var loadPageViewCommentsFn = loadPageViewComments
 var printViewedPageFn = output.PrintViewedPage
 var printWarningFn = output.PrintWarning
+var requirePageClientFn = cli.RequireClient
 
 type PageListCmd struct {
 	Query string `help:"Filter pages by name" short:"q"`
@@ -250,20 +252,21 @@ func runPageCreate(ctx *Context, title, parent, content string) error {
 }
 
 type PageUploadCmd struct {
-	File     string `arg:"" help:"Markdown file to upload" type:"existingfile"`
-	Title    string `help:"Page title (default: filename or first heading)" short:"t"`
-	Parent   string `help:"Parent page URL, name, or ID" short:"p"`
-	ParentDB string `help:"Parent database URL, name, or ID" name:"parent-db" short:"d"`
-	Icon     string `help:"Emoji icon for the page" short:"i"`
-	JSON     bool   `help:"Output as JSON" short:"j"`
+	File            string `arg:"" help:"Markdown file to upload" type:"existingfile"`
+	Title           string `help:"Page title (default: filename or first heading)" short:"t"`
+	Parent          string `help:"Parent page URL, name, or ID" short:"p"`
+	ParentDB        string `help:"Parent database URL, name, or ID" name:"parent-db" short:"d"`
+	Icon            string `help:"Emoji icon for the page" short:"i"`
+	SkipLocalImages bool   `help:"Strip local image references instead of uploading them" name:"skip-local-images"`
+	JSON            bool   `help:"Output as JSON" short:"j"`
 }
 
 func (c *PageUploadCmd) Run(ctx *Context) error {
 	ctx.JSON = c.JSON
-	return runPageUpload(ctx, c.File, c.Title, c.Parent, c.ParentDB, c.Icon)
+	return runPageUpload(ctx, c.File, c.Title, c.Parent, c.ParentDB, c.Icon, c.SkipLocalImages)
 }
 
-func runPageUpload(ctx *Context, file, title, parent, parentDB, icon string) error {
+func runPageUpload(ctx *Context, file, title, parent, parentDB, icon string, skipLocalImages bool) error {
 	content, err := os.ReadFile(file)
 	if err != nil {
 		output.PrintError(err)
@@ -271,16 +274,18 @@ func runPageUpload(ctx *Context, file, title, parent, parentDB, icon string) err
 	}
 
 	markdown := string(content)
-
-	if title == "" {
-		title = extractTitleFromMarkdown(markdown)
-	}
-	if title == "" {
-		title = strings.TrimSuffix(filepath.Base(file), filepath.Ext(file))
-	}
-
-	if icon == "" {
-		icon, title = extractEmojiFromTitle(title)
+	bgCtx := context.Background()
+	if skipLocalImages {
+		markdown, err = stripLocalImages(markdown)
+		if err != nil {
+			output.PrintError(err)
+			return err
+		}
+	} else {
+		if err := checkLocalImageParent(markdown, parent, parentDB); err != nil {
+			output.PrintError(err)
+			return err
+		}
 	}
 
 	client, err := cli.RequireClient()
@@ -289,13 +294,9 @@ func runPageUpload(ctx *Context, file, title, parent, parentDB, icon string) err
 	}
 	defer func() { _ = client.Close() }()
 
-	bgCtx := context.Background()
-
-	req := mcp.CreatePageRequest{
-		Title:   title,
-		Content: markdown,
-	}
-
+	// Resolve parent IDs before any upload side effects so an invalid
+	// --parent/--parent-db doesn't leave orphaned file uploads behind.
+	req := mcp.CreatePageRequest{}
 	if parentDB != "" {
 		dbID, err := cli.ResolveDatabaseID(bgCtx, client, parentDB)
 		if err != nil {
@@ -317,8 +318,36 @@ func runPageUpload(ctx *Context, file, title, parent, parentDB, icon string) err
 		req.ParentPageID = parentID
 	}
 
+	var localUploads []uploadedLocalImage
+	if !skipLocalImages {
+		markdown, localUploads, err = prepareLocalImageUploads(ctx, bgCtx, file, markdown)
+		if err != nil {
+			output.PrintError(err)
+			return err
+		}
+	}
+
+	if title == "" {
+		title = extractTitleFromMarkdown(markdown)
+	}
+	if title == "" {
+		title = strings.TrimSuffix(filepath.Base(file), filepath.Ext(file))
+	}
+
+	if icon == "" {
+		icon, title = extractEmojiFromTitle(title)
+	}
+
+	req.Title = title
+	req.Content = markdown
+
 	resp, err := client.CreatePage(bgCtx, req)
 	if err != nil {
+		output.PrintError(err)
+		return err
+	}
+	pageID := pageIDFromCreateResponse(resp)
+	if err := substituteOrCleanup(ctx, bgCtx, pageID, resp.URL, localUploads); err != nil {
 		output.PrintError(err)
 		return err
 	}
@@ -330,7 +359,7 @@ func runPageUpload(ctx *Context, file, title, parent, parentDB, icon string) err
 
 	if ctx.JSON {
 		outPage := output.Page{
-			ID:    resp.ID,
+			ID:    pageID,
 			URL:   resp.URL,
 			Title: displayTitle,
 			Icon:  icon,
@@ -545,20 +574,21 @@ func parsePageEditProperties(props []string) (map[string]any, error) {
 }
 
 type PageSyncCmd struct {
-	File     string `arg:"" help:"Markdown file to sync" type:"existingfile"`
-	Title    string `help:"Page title (default: filename or first heading)" short:"t"`
-	Parent   string `help:"Parent page URL, name, or ID" short:"p"`
-	ParentDB string `help:"Parent database URL, name, or ID" name:"parent-db" short:"d"`
-	Icon     string `help:"Emoji icon for the page" short:"i"`
-	JSON     bool   `help:"Output as JSON" short:"j"`
+	File            string `arg:"" help:"Markdown file to sync" type:"existingfile"`
+	Title           string `help:"Page title (default: filename or first heading)" short:"t"`
+	Parent          string `help:"Parent page URL, name, or ID" short:"p"`
+	ParentDB        string `help:"Parent database URL, name, or ID" name:"parent-db" short:"d"`
+	Icon            string `help:"Emoji icon for the page" short:"i"`
+	SkipLocalImages bool   `help:"Strip local image references instead of uploading them" name:"skip-local-images"`
+	JSON            bool   `help:"Output as JSON" short:"j"`
 }
 
 func (c *PageSyncCmd) Run(ctx *Context) error {
 	ctx.JSON = c.JSON
-	return runPageSync(ctx, c.File, c.Title, c.Parent, c.ParentDB, c.Icon)
+	return runPageSync(ctx, c.File, c.Title, c.Parent, c.ParentDB, c.Icon, c.SkipLocalImages)
 }
 
-func runPageSync(ctx *Context, file, title, parent, parentDB, icon string) error {
+func runPageSync(ctx *Context, file, title, parent, parentDB, icon string, skipLocalImages bool) error {
 	raw, err := os.ReadFile(file)
 	if err != nil {
 		output.PrintError(err)
@@ -567,6 +597,104 @@ func runPageSync(ctx *Context, file, title, parent, parentDB, icon string) error
 
 	content := string(raw)
 	fm, body := cli.ParseFrontmatter(content)
+	bgCtx := context.Background()
+	var localUploads []uploadedLocalImage
+	var snapshot *api.PageMarkdown
+	var resolvedParentPageID, resolvedParentDatabaseID string
+	var client *mcp.Client
+	defer func() {
+		if client != nil {
+			_ = client.Close()
+		}
+	}()
+	if skipLocalImages {
+		body, err = stripLocalImages(body)
+		if err != nil {
+			output.PrintError(err)
+			return err
+		}
+	} else {
+		// Dry-run scan so we know whether uploads will happen before anything
+		// goes over the wire. This lets us validate the parent flags and,
+		// for in-place sync, fetch the rollback snapshot (and gate on
+		// truncation) before we touch the official API.
+		_, placements, scanErr := cli.FindStandaloneLocalImageLines(body)
+		if scanErr != nil {
+			output.PrintError(scanErr)
+			return scanErr
+		}
+		hasLocalImages := len(placements) > 0
+
+		if fm.NotionID == "" {
+			if err := checkLocalImageParent(body, parent, parentDB); err != nil {
+				output.PrintError(err)
+				return err
+			}
+		}
+
+		if hasLocalImages && fm.NotionID != "" {
+			client, err = requirePageClientFn()
+			if err != nil {
+				return err
+			}
+
+			apiClient, err := cli.RequireOfficialAPIClient(officialAPIOverrides(ctx))
+			if err != nil {
+				output.PrintError(err)
+				return err
+			}
+			snapshot, err = apiClient.GetPageMarkdown(bgCtx, fm.NotionID)
+			if err != nil {
+				output.PrintError(err)
+				return err
+			}
+			if snapshot.Truncated {
+				finalErr := fmt.Errorf("cannot sync local images safely: page %s markdown snapshot is truncated, so rollback on a failed substitution would leave placeholders in the page. Retry without local images or reduce the page before syncing", fm.NotionID)
+				output.PrintError(finalErr)
+				return finalErr
+			}
+			if len(snapshot.UnknownBlockIDs) > 0 {
+				finalErr := fmt.Errorf("cannot sync local images safely: page %s contains %d block(s) that cannot be represented in markdown, so rollback on a failed substitution would drop them. Retry without local images or remove the unsupported blocks before syncing", fm.NotionID, len(snapshot.UnknownBlockIDs))
+				output.PrintError(finalErr)
+				return finalErr
+			}
+		}
+
+		// For the create path, resolve parent IDs before any uploads so an
+		// invalid --parent/--parent-db doesn't leave orphaned file uploads.
+		if hasLocalImages && fm.NotionID == "" {
+			client, err = requirePageClientFn()
+			if err != nil {
+				return err
+			}
+			if parentDB != "" {
+				dbID, err := cli.ResolveDatabaseID(bgCtx, client, parentDB)
+				if err != nil {
+					output.PrintError(err)
+					return err
+				}
+				dbID, err = client.ResolveDataSourceID(bgCtx, dbID)
+				if err != nil {
+					output.PrintError(err)
+					return err
+				}
+				resolvedParentDatabaseID = dbID
+			} else if parent != "" {
+				parentID, err := cli.ResolvePageID(bgCtx, client, parent)
+				if err != nil {
+					output.PrintError(err)
+					return err
+				}
+				resolvedParentPageID = parentID
+			}
+		}
+
+		body, localUploads, err = prepareLocalImageUploads(ctx, bgCtx, file, body)
+		if err != nil {
+			output.PrintError(err)
+			return err
+		}
+	}
 
 	if title == "" {
 		title = extractTitleFromMarkdown(body)
@@ -578,13 +706,12 @@ func runPageSync(ctx *Context, file, title, parent, parentDB, icon string) error
 		icon, title = extractEmojiFromTitle(title)
 	}
 
-	client, err := cli.RequireClient()
-	if err != nil {
-		return err
+	if client == nil {
+		client, err = requirePageClientFn()
+		if err != nil {
+			return err
+		}
 	}
-	defer func() { _ = client.Close() }()
-
-	bgCtx := context.Background()
 
 	if fm.NotionID != "" {
 		req := mcp.UpdatePageRequest{
@@ -595,6 +722,15 @@ func runPageSync(ctx *Context, file, title, parent, parentDB, icon string) error
 		if err := client.UpdatePage(bgCtx, req); err != nil {
 			output.PrintError(err)
 			return err
+		}
+		if err := substituteUploadedLocalImages(ctx, bgCtx, fm.NotionID, localUploads); err != nil {
+			finalErr := fmt.Errorf("insert uploaded local images: %w", err)
+			rollbackErr := rollbackSyncedPage(bgCtx, client, fm.NotionID, snapshot)
+			if rollbackErr != nil {
+				finalErr = fmt.Errorf("%w (rollback failed: %v)", finalErr, rollbackErr)
+			}
+			output.PrintError(finalErr)
+			return finalErr
 		}
 
 		displayTitle := title
@@ -620,7 +756,13 @@ func runPageSync(ctx *Context, file, title, parent, parentDB, icon string) error
 		Content: body,
 	}
 
-	if parentDB != "" {
+	// Reuse parent IDs pre-resolved above when local images were involved;
+	// otherwise resolve here for the no-upload create path.
+	if resolvedParentDatabaseID != "" {
+		req.ParentDatabaseID = resolvedParentDatabaseID
+	} else if resolvedParentPageID != "" {
+		req.ParentPageID = resolvedParentPageID
+	} else if parentDB != "" {
 		dbID, err := cli.ResolveDatabaseID(bgCtx, client, parentDB)
 		if err != nil {
 			output.PrintError(err)
@@ -647,9 +789,10 @@ func runPageSync(ctx *Context, file, title, parent, parentDB, icon string) error
 		return err
 	}
 
-	pageID := resp.ID
-	if pageID == "" && resp.URL != "" {
-		pageID, _ = cli.ExtractNotionUUID(resp.URL)
+	pageID := pageIDFromCreateResponse(resp)
+	if err := substituteOrCleanup(ctx, bgCtx, pageID, resp.URL, localUploads); err != nil {
+		output.PrintError(err)
+		return err
 	}
 	if pageID == "" {
 		output.PrintWarning("Page created but could not retrieve ID for frontmatter")

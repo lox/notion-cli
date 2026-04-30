@@ -26,7 +26,7 @@ Or see: https://github.com/lox/notion-cli
 
 ## Authentication
 
-The CLI uses OAuth authentication. On first use, it opens a browser for authorization:
+The CLI uses OAuth authentication for MCP-backed commands. On first use, it opens a browser for authorization:
 
 ```bash
 notion-cli auth login      # Authenticate with Notion
@@ -36,6 +36,17 @@ notion-cli auth logout     # Clear credentials
 ```
 
 For CI/headless environments, set `NOTION_ACCESS_TOKEN` environment variable.
+
+Some fallback features also use the official Notion API:
+
+```bash
+notion-cli auth api setup
+notion-cli auth api status
+notion-cli auth api verify
+notion-cli auth api unset
+```
+
+For CI/headless environments, set `NOTION_API_TOKEN`.
 
 ## Available Commands
 
@@ -105,6 +116,8 @@ notion-cli page edit <page> --find "section" --append "additional content"
 notion-cli page archive https://notion.so/...
 notion-cli page archive 12345678-abcd-ef12-3456-7890abcdef12
 ```
+
+For `page upload` and `page sync`, standalone local markdown image lines like `![Alt](./diagram.png)` are uploaded natively through the official API when configured. Local images must appear on their own line. Inline or mixed-content local image syntax is rejected.
 
 `page view` shows open page-level comments and inline block discussions by default. Inline discussions are rendered beside their anchor text, with the anchor wrapped in `[[...]]` and the discussion shown immediately below it. Use `--no-comments` when you only want the page body, `--raw` to inspect the original Notion markup, and `--json` when an agent needs the page plus the `Comments` array.
 
@@ -179,4 +192,5 @@ notion-cli search "api" --json | jq '.[] | .title'
 7. **Raw output** - Use `--raw` with `page view` to see the original Notion markup
 8. **JSON for parsing** - Use `--json` when you need to extract specific fields, including the `Comments` array from `page view`
 9. **Auth preflight** - Run `notion-cli auth status --json` before a multi-step workflow and refresh/login if needed
-10. **Error handling** - If a targeted `page edit` call fails, rerun with `--replace` as a safe fallback
+10. **API fallback preflight** - Run `notion-cli auth api verify` before workflows that need local image upload
+11. **Error handling** - If a targeted `page edit` call fails, rerun with `--replace` as a safe fallback
