@@ -479,6 +479,26 @@ func TestFindStandaloneLocalImageLinesIgnoresBlockquotedImage(t *testing.T) {
 	}
 }
 
+func TestFindStandaloneLocalImageLinesHonorsBlockquoteIndentLimit(t *testing.T) {
+	blockquote := "   > ![Quoted](./quoted.png)\n"
+
+	rewritten, placements, err := FindStandaloneLocalImageLines(blockquote)
+	if err != nil {
+		t.Fatalf("FindStandaloneLocalImageLines: %v", err)
+	}
+	if len(placements) != 0 {
+		t.Fatalf("len(placements) = %d, want 0", len(placements))
+	}
+	if rewritten != blockquote {
+		t.Fatalf("rewritten = %q, want input unchanged", rewritten)
+	}
+
+	_, _, err = FindStandaloneLocalImageLines("text\n    > ![Code](./code.png)\n")
+	if err == nil {
+		t.Fatal("expected local image syntax error for 4-space-indented > line")
+	}
+}
+
 func TestIsLocalDestinationHandlesWindowsAndURISchemes(t *testing.T) {
 	cases := []struct {
 		name string

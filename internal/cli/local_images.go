@@ -401,7 +401,7 @@ func isStandaloneImageLine(line string, matches []markdownImageMatch) bool {
 // blockquote (a `>` optionally preceded by up to three spaces of indent).
 func isBlockquoteLine(line string) bool {
 	i := 0
-	for i < len(line) && i < 4 && line[i] == ' ' {
+	for i < len(line) && i < 3 && line[i] == ' ' {
 		i++
 	}
 	return i < len(line) && line[i] == '>'
