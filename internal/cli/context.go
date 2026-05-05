@@ -9,31 +9,36 @@ import (
 
 	"github.com/lox/notion-cli/internal/mcp"
 	"github.com/lox/notion-cli/internal/output"
-	"github.com/lox/notion-cli/internal/profile"
 )
 
 var accessToken string
+var profile string
 var authRefreshNoticeWriter io.Writer = os.Stderr
 
 func SetAccessToken(token string) {
 	accessToken = token
 }
 
-func GetClient(p profile.Profile) (*mcp.Client, error) {
+func SetProfile(value string) {
+	profile = value
+}
+
+func GetClient() (*mcp.Client, error) {
 	ctx := context.Background()
 
 	// Auto-refresh if token is expired or expiring soon
 	if accessToken == "" {
-		if err := autoRefreshIfNeeded(ctx, p); err != nil {
+		if err := autoRefreshIfNeeded(ctx); err != nil {
 			// Non-fatal, but surface guidance to reduce auth-related command failures.
 			printAuthRefreshGuidance(err)
 		}
 	}
 
-	opts := []mcp.ClientOption{mcp.WithProfile(p)}
+	var opts []mcp.ClientOption
 	if accessToken != "" {
 		opts = append(opts, mcp.WithAccessToken(accessToken))
 	}
+	opts = append(opts, mcp.WithProfile(profile))
 
 	client, err := mcp.NewClient(opts...)
 	if err != nil {
@@ -51,8 +56,8 @@ func GetClient(p profile.Profile) (*mcp.Client, error) {
 	return client, nil
 }
 
-func autoRefreshIfNeeded(ctx context.Context, p profile.Profile) error {
-	tokenStore, err := mcp.NewFileTokenStoreForProfile(p)
+func autoRefreshIfNeeded(ctx context.Context) error {
+	tokenStore, err := mcp.NewFileTokenStore(profile)
 	if err != nil {
 		return err
 	}
@@ -68,7 +73,7 @@ func autoRefreshIfNeeded(ctx context.Context, p profile.Profile) error {
 			return fmt.Errorf("token expired and no refresh token available")
 		}
 
-		_, err := mcp.RefreshToken(ctx, tokenStore)
+		_, err := mcp.RefreshTokenIfNeeded(ctx, tokenStore)
 		if err != nil {
 			return fmt.Errorf("auto-refresh failed: %w", err)
 		}
@@ -77,8 +82,8 @@ func autoRefreshIfNeeded(ctx context.Context, p profile.Profile) error {
 	return nil
 }
 
-func RequireClient(p profile.Profile) (*mcp.Client, error) {
-	return GetClient(p)
+func RequireClient() (*mcp.Client, error) {
+	return GetClient()
 }
 
 func printAuthRefreshGuidance(err error) {

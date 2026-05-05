@@ -138,10 +138,13 @@ func TestAuthAPIStatusJSONUsesLoadedConfig(t *testing.T) {
 	})
 
 	cmd := &AuthAPIStatusCmd{JSON: true}
-	if err := cmd.Run(&Context{APIToken: "env-token"}); err != nil {
+	if err := cmd.Run(&Context{Profile: "work", APIToken: "env-token"}); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	if !strings.Contains(out.String(), `"configured": true`) {
+		t.Fatalf("unexpected output: %s", out.String())
+	}
+	if !strings.Contains(out.String(), `"profile": "work"`) {
 		t.Fatalf("unexpected output: %s", out.String())
 	}
 	if !strings.Contains(out.String(), `"token_source": "env"`) {

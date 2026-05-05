@@ -5,31 +5,32 @@ import (
 
 	"github.com/lox/notion-cli/internal/api"
 	"github.com/lox/notion-cli/internal/config"
-	"github.com/lox/notion-cli/internal/profile"
 )
 
 type OfficialAPIConfig struct {
 	Config         config.Config
+	Profile        string
 	ConfigPath     string
 	APITokenSource string
 	HasConfigToken bool
 }
 
-func LoadOfficialAPIConfig(p profile.Profile, overrides config.APIOverrides) (*OfficialAPIConfig, error) {
-	loaded, err := config.LoadWithMetaForProfile(p, overrides)
+func LoadOfficialAPIConfig(overrides config.APIOverrides) (*OfficialAPIConfig, error) {
+	loaded, err := config.LoadWithMeta(overrides)
 	if err != nil {
 		return nil, fmt.Errorf("load config: %w", err)
 	}
 	return &OfficialAPIConfig{
 		Config:         loaded.Config,
+		Profile:        loaded.Profile,
 		ConfigPath:     loaded.Path,
 		APITokenSource: loaded.APITokenSource,
 		HasConfigToken: loaded.HasConfigToken,
 	}, nil
 }
 
-func RequireOfficialAPIClient(p profile.Profile, overrides config.APIOverrides) (*api.Client, error) {
-	loaded, err := LoadOfficialAPIConfig(p, overrides)
+func RequireOfficialAPIClient(overrides config.APIOverrides) (*api.Client, error) {
+	loaded, err := LoadOfficialAPIConfig(overrides)
 	if err != nil {
 		return nil, err
 	}

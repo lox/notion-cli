@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lox/notion-cli/internal/profile"
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/client/transport"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -32,8 +31,7 @@ type ClientOption func(*clientConfig)
 type clientConfig struct {
 	endpoint    string
 	accessToken string
-	profile     profile.Profile
-	hasProfile  bool
+	profile     string
 }
 
 func WithEndpoint(endpoint string) ClientOption {
@@ -48,13 +46,9 @@ func WithAccessToken(token string) ClientOption {
 	}
 }
 
-// WithProfile routes the OAuth token store to the given profile so named
-// profiles read and refresh their own credentials instead of falling back
-// to the default profile's top-level files.
-func WithProfile(p profile.Profile) ClientOption {
+func WithProfile(profile string) ClientOption {
 	return func(c *clientConfig) {
-		c.profile = p
-		c.hasProfile = true
+		c.profile = profile
 	}
 }
 
@@ -66,13 +60,7 @@ func NewClient(opts ...ClientOption) (*Client, error) {
 		opt(cfg)
 	}
 
-	var tokenStore *FileTokenStore
-	var err error
-	if cfg.hasProfile {
-		tokenStore, err = NewFileTokenStoreForProfile(cfg.profile)
-	} else {
-		tokenStore, err = NewFileTokenStore()
-	}
+	tokenStore, err := NewFileTokenStore(cfg.profile)
 	if err != nil {
 		return nil, fmt.Errorf("create token store: %w", err)
 	}
@@ -209,9 +197,8 @@ func (c *Client) Search(ctx context.Context, query string, opts *SearchOptions) 
 }
 
 func buildSearchToolArgs(query string, opts *SearchOptions) map[string]any {
-	args := map[string]any{}
-	if strings.TrimSpace(query) != "" {
-		args["query"] = query
+	args := map[string]any{
+		"query": strings.TrimSpace(query),
 	}
 	if opts != nil && opts.ContentSearchMode != "" {
 		args["content_search_mode"] = opts.ContentSearchMode

@@ -9,6 +9,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/fatih/color"
 	"github.com/lox/notion-cli/internal/cli"
@@ -22,6 +23,8 @@ type AuthCmd struct {
 	Login   AuthLoginCmd   `cmd:"" help:"Authenticate with Notion via OAuth"`
 	Refresh AuthRefreshCmd `cmd:"" help:"Refresh the access token"`
 	Status  AuthStatusCmd  `cmd:"" default:"withargs" help:"Show authentication status"`
+	List    AuthListCmd    `cmd:"" help:"List profiles and authentication state"`
+	Use     AuthUseCmd     `cmd:"" help:"Set the active profile"`
 	Logout  AuthLogoutCmd  `cmd:"" help:"Clear stored credentials"`
 	API     AuthAPICmd     `cmd:"" name:"api" help:"Official API token commands"`
 }
@@ -34,10 +37,21 @@ var notionAPITokenPattern = regexp.MustCompile(`^ntn_[A-Za-z0-9]{20,}$`)
 
 const officialAPIIntegrationsURL = "https://www.notion.so/profile/integrations/internal"
 
+type authProfileStatus struct {
+	Profile        string     `json:"profile"`
+	Active         bool       `json:"active"`
+	HasOAuthToken  bool       `json:"has_oauth_token"`
+	OAuthStatus    string     `json:"oauth_status"`
+	OAuthExpiresAt *time.Time `json:"oauth_expires_at,omitempty"`
+	HasAPIToken    bool       `json:"has_api_token"`
+	TokenPath      string     `json:"token_path"`
+	ConfigPath     string     `json:"config_path"`
+}
+
 type AuthLoginCmd struct{}
 
 func (c *AuthLoginCmd) Run(ctx *Context) error {
-	tokenStore, err := mcp.NewFileTokenStoreForProfile(ctx.Profile)
+	tokenStore, err := mcp.NewFileTokenStore(ctx.Profile)
 	if err != nil {
 		output.PrintError(err)
 		return err
@@ -55,7 +69,7 @@ func (c *AuthLoginCmd) Run(ctx *Context) error {
 type AuthRefreshCmd struct{}
 
 func (c *AuthRefreshCmd) Run(ctx *Context) error {
-	tokenStore, err := mcp.NewFileTokenStoreForProfile(ctx.Profile)
+	tokenStore, err := mcp.NewFileTokenStore(ctx.Profile)
 	if err != nil {
 		output.PrintError(err)
 		return err
@@ -95,69 +109,144 @@ type AuthStatusCmd struct {
 func (c *AuthStatusCmd) Run(ctx *Context) error {
 	ctx.JSON = c.JSON
 
-	tokenStore, err := mcp.NewFileTokenStoreForProfile(ctx.Profile)
+	status, err := inspectProfileStatus(ctx.Profile)
 	if err != nil {
 		output.PrintError(err)
 		return err
 	}
-
-	token, err := tokenStore.GetToken(context.Background())
-	if err != nil {
-		if err == mcp.ErrNoToken {
-			fmt.Println("Not authenticated. Run 'notion-cli auth login' to authenticate.")
-			return nil
-		}
-		output.PrintError(err)
-		return err
-	}
-
-	hasValidToken := token.AccessToken != "" && !token.IsExpired()
-	activeProfile := ctx.Profile
 
 	if ctx.JSON {
+		payload := map[string]any{
+			"authenticated": status.OAuthStatus == "valid",
+			"profile":       status.Profile,
+			"has_token":     status.HasOAuthToken,
+			"token_path":    status.TokenPath,
+			"oauth_status":  status.OAuthStatus,
+		}
+		if status.OAuthExpiresAt != nil {
+			payload["expires_at"] = status.OAuthExpiresAt
+		}
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
-		return enc.Encode(map[string]any{
-			"authenticated":  hasValidToken,
-			"token_type":     token.TokenType,
-			"has_token":      token.AccessToken != "",
-			"expires_at":     token.ExpiresAt,
-			"config_path":    tokenStore.Path(),
-			"profile":        activeProfile.Name,
-			"profile_source": string(activeProfile.Source),
-		})
+		return enc.Encode(payload)
 	}
 
 	labelStyle := color.New(color.Faint)
-
-	if hasValidToken {
+	switch status.OAuthStatus {
+	case "valid":
 		output.PrintSuccess("Authenticated")
-	} else {
-		output.PrintWarning("Token expired or not set")
+	case "expired":
+		output.PrintWarning("Token expired")
+	default:
+		output.PrintWarning("Not authenticated")
 	}
 	fmt.Println()
 
-	_, _ = labelStyle.Print("Profile:     ")
-	fmt.Printf("%s (from %s)\n", activeProfile.Name, activeProfile.Source)
+	_, _ = labelStyle.Print("Profile:    ")
+	fmt.Println(status.Profile)
+	_, _ = labelStyle.Print("Token path: ")
+	fmt.Println(status.TokenPath)
 
-	_, _ = labelStyle.Print("Config path: ")
-	fmt.Println(tokenStore.Path())
-
-	_, _ = labelStyle.Print("Token type:  ")
-	fmt.Println(token.TokenType)
-
-	if !token.ExpiresAt.IsZero() {
-		_, _ = labelStyle.Print("Expires:     ")
-		fmt.Println(token.ExpiresAt.Format("2 Jan 2006 15:04"))
+	if status.OAuthExpiresAt != nil {
+		_, _ = labelStyle.Print("Expires:    ")
+		fmt.Println(status.OAuthExpiresAt.Format("2 Jan 2006 15:04"))
+	}
+	if status.OAuthStatus == "missing" {
+		_, _ = fmt.Fprintln(os.Stdout, "Run 'notion-cli auth login' to authenticate this profile.")
 	}
 
+	return nil
+}
+
+type AuthListCmd struct {
+	JSON bool `help:"Output as JSON" short:"j"`
+}
+
+func (c *AuthListCmd) Run(ctx *Context) error {
+	profiles, err := config.ListProfiles()
+	if err != nil {
+		output.PrintError(err)
+		return err
+	}
+
+	rows := make([]authProfileStatus, 0, len(profiles))
+	for _, profile := range profiles {
+		row, err := inspectProfileStatus(profile)
+		if err != nil {
+			output.PrintError(err)
+			return err
+		}
+		rows = append(rows, row)
+	}
+
+	if c.JSON {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(rows)
+	}
+
+	labelStyle := color.New(color.Faint)
+	for i, row := range rows {
+		header := row.Profile
+		if row.Active {
+			header += " (active)"
+		}
+		fmt.Println(header)
+		_, _ = labelStyle.Print("  OAuth:      ")
+		fmt.Println(row.OAuthStatus)
+		if row.OAuthExpiresAt != nil {
+			_, _ = labelStyle.Print("  Expires:    ")
+			fmt.Println(row.OAuthExpiresAt.Format("2 Jan 2006 15:04"))
+		}
+		_, _ = labelStyle.Print("  API token:  ")
+		if row.HasAPIToken {
+			fmt.Println("configured")
+		} else {
+			fmt.Println("missing")
+		}
+		_, _ = labelStyle.Print("  Token path: ")
+		fmt.Println(row.TokenPath)
+		_, _ = labelStyle.Print("  Config path:")
+		fmt.Println(" " + row.ConfigPath)
+		if i < len(rows)-1 {
+			fmt.Println()
+		}
+	}
+
+	return nil
+}
+
+type AuthUseCmd struct {
+	Profile string `arg:"" help:"Profile name to make active"`
+}
+
+func (c *AuthUseCmd) Run(ctx *Context) error {
+	if err := config.SetActiveProfile(c.Profile); err != nil {
+		output.PrintError(err)
+		return err
+	}
+
+	status, err := inspectProfileStatus(c.Profile)
+	if err != nil {
+		output.PrintError(err)
+		return err
+	}
+
+	output.PrintSuccess("Active profile updated")
+	fmt.Printf("Profile: %s\n", status.Profile)
+	if status.OAuthStatus == "missing" {
+		fmt.Println("Run 'notion-cli auth login' to authenticate this profile.")
+	}
+	if !status.HasAPIToken {
+		fmt.Println("Run 'notion-cli auth api setup' if this profile needs official API features.")
+	}
 	return nil
 }
 
 type AuthLogoutCmd struct{}
 
 func (c *AuthLogoutCmd) Run(ctx *Context) error {
-	tokenStore, err := mcp.NewFileTokenStoreForProfile(ctx.Profile)
+	tokenStore, err := mcp.NewFileTokenStore(ctx.Profile)
 	if err != nil {
 		output.PrintError(err)
 		return err
@@ -202,7 +291,7 @@ func (c *AuthAPISetupCmd) Run(ctx *Context) error {
 	}
 
 	output.PrintSuccess("Official API token saved")
-	_, _ = fmt.Fprintf(authAPIOutput, "Config path: %s\n", mustConfigPath(ctx))
+	_, _ = fmt.Fprintf(authAPIOutput, "Config path: %s\n", mustConfigPath(ctx.Profile))
 	return nil
 }
 
@@ -213,7 +302,7 @@ type AuthAPIStatusCmd struct {
 func (c *AuthAPIStatusCmd) Run(ctx *Context) error {
 	ctx.JSON = c.JSON
 
-	loaded, err := cli.LoadOfficialAPIConfig(ctx.Profile, officialAPIOverrides(ctx))
+	loaded, err := cli.LoadOfficialAPIConfig(officialAPIOverrides(ctx))
 	if err != nil {
 		output.PrintError(err)
 		return err
@@ -228,12 +317,12 @@ type AuthAPIVerifyCmd struct {
 func (c *AuthAPIVerifyCmd) Run(ctx *Context) error {
 	ctx.JSON = c.JSON
 
-	loaded, err := cli.LoadOfficialAPIConfig(ctx.Profile, officialAPIOverrides(ctx))
+	loaded, err := cli.LoadOfficialAPIConfig(officialAPIOverrides(ctx))
 	if err != nil {
 		output.PrintError(err)
 		return err
 	}
-	client, err := cli.RequireOfficialAPIClient(ctx.Profile, officialAPIOverrides(ctx))
+	client, err := cli.RequireOfficialAPIClient(officialAPIOverrides(ctx))
 	if err != nil {
 		output.PrintError(err)
 		return err
@@ -250,6 +339,7 @@ func (c *AuthAPIVerifyCmd) Run(ctx *Context) error {
 		enc.SetIndent("", "  ")
 		return enc.Encode(map[string]any{
 			"verified":       true,
+			"profile":        loaded.Profile,
 			"token_source":   loaded.APITokenSource,
 			"config_path":    loaded.ConfigPath,
 			"base_url":       loaded.Config.API.BaseURL,
@@ -259,6 +349,7 @@ func (c *AuthAPIVerifyCmd) Run(ctx *Context) error {
 	}
 
 	output.PrintSuccess("Official API token verified")
+	_, _ = fmt.Fprintf(authAPIOutput, "Profile:        %s\n", loaded.Profile)
 	_, _ = fmt.Fprintf(authAPIOutput, "Token source:   %s\n", loaded.APITokenSource)
 	_, _ = fmt.Fprintf(authAPIOutput, "Config path:    %s\n", loaded.ConfigPath)
 	_, _ = fmt.Fprintf(authAPIOutput, "Base URL:       %s\n", loaded.Config.API.BaseURL)
@@ -275,7 +366,7 @@ func (c *AuthAPIVerifyCmd) Run(ctx *Context) error {
 type AuthAPIUnsetCmd struct{}
 
 func (c *AuthAPIUnsetCmd) Run(ctx *Context) error {
-	loaded, err := cli.LoadOfficialAPIConfig(ctx.Profile, officialAPIOverrides(ctx))
+	loaded, err := cli.LoadOfficialAPIConfig(officialAPIOverrides(ctx))
 	if err != nil {
 		output.PrintError(err)
 		return err
@@ -312,6 +403,7 @@ func printAuthAPIStatus(ctx *Context, loaded *cli.OfficialAPIConfig) error {
 		enc.SetIndent("", "  ")
 		return enc.Encode(map[string]any{
 			"configured":     hasToken,
+			"profile":        loaded.Profile,
 			"token_source":   loaded.APITokenSource,
 			"config_path":    loaded.ConfigPath,
 			"base_url":       loaded.Config.API.BaseURL,
@@ -325,6 +417,7 @@ func printAuthAPIStatus(ctx *Context, loaded *cli.OfficialAPIConfig) error {
 		output.PrintWarning("Official API token not configured")
 	}
 	_, _ = fmt.Fprintln(authAPIOutput)
+	_, _ = fmt.Fprintf(authAPIOutput, "Profile:        %s\n", loaded.Profile)
 	_, _ = fmt.Fprintf(authAPIOutput, "Token source:   %s\n", loaded.APITokenSource)
 	_, _ = fmt.Fprintf(authAPIOutput, "Config path:    %s\n", loaded.ConfigPath)
 	_, _ = fmt.Fprintf(authAPIOutput, "Base URL:       %s\n", loaded.Config.API.BaseURL)
@@ -380,10 +473,62 @@ func printOfficialAPITokenSetupHint(out io.Writer, shouldOpenBrowser bool) {
 	_, _ = fmt.Fprintln(out)
 }
 
-func mustConfigPath(ctx *Context) string {
-	path, err := config.PathFor(ctx.Profile)
+func mustConfigPath(profile string) string {
+	path, err := config.PathForProfile(profile)
 	if err != nil {
 		return "<unknown>"
 	}
 	return path
+}
+
+func inspectProfileStatus(profile string) (authProfileStatus, error) {
+	resolvedProfile, err := config.ResolveProfile(profile)
+	if err != nil {
+		return authProfileStatus{}, err
+	}
+	active, err := config.ActiveProfile()
+	if err != nil {
+		return authProfileStatus{}, err
+	}
+	paths, err := config.PathsForProfile(resolvedProfile)
+	if err != nil {
+		return authProfileStatus{}, err
+	}
+	loaded, err := config.LoadWithMeta(config.APIOverrides{Profile: resolvedProfile})
+	if err != nil {
+		return authProfileStatus{}, err
+	}
+
+	status := authProfileStatus{
+		Profile:     resolvedProfile,
+		Active:      resolvedProfile == active,
+		HasAPIToken: loaded.HasConfigToken,
+		TokenPath:   paths.TokenPath,
+		ConfigPath:  paths.ConfigPath,
+		OAuthStatus: "missing",
+	}
+
+	tokenStore, err := mcp.NewFileTokenStore(resolvedProfile)
+	if err != nil {
+		return authProfileStatus{}, err
+	}
+	token, err := tokenStore.GetToken(context.Background())
+	if err != nil {
+		if err == mcp.ErrNoToken {
+			return status, nil
+		}
+		return authProfileStatus{}, err
+	}
+
+	status.HasOAuthToken = strings.TrimSpace(token.AccessToken) != ""
+	expiresAt := token.ExpiresAt
+	status.OAuthExpiresAt = &expiresAt
+	if status.HasOAuthToken {
+		if token.IsExpired() {
+			status.OAuthStatus = "expired"
+		} else {
+			status.OAuthStatus = "valid"
+		}
+	}
+	return status, nil
 }

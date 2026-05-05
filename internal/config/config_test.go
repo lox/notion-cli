@@ -3,9 +3,9 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"reflect"
+	"strings"
 	"testing"
-
-	"github.com/lox/notion-cli/internal/profile"
 )
 
 func TestLoadWithMetaDefaults(t *testing.T) {
@@ -23,6 +23,9 @@ func TestLoadWithMetaDefaults(t *testing.T) {
 	}
 	if loaded.APITokenSource != APITokenSourceNone {
 		t.Fatalf("APITokenSource = %q, want %q", loaded.APITokenSource, APITokenSourceNone)
+	}
+	if loaded.Profile != DefaultProfile() {
+		t.Fatalf("Profile = %q, want %q", loaded.Profile, DefaultProfile())
 	}
 }
 
@@ -92,42 +95,6 @@ func TestUnsetAPITokenClearsStoredToken(t *testing.T) {
 	}
 }
 
-func TestSetAPITokenIsIsolatedPerProfile(t *testing.T) {
-	tmp := t.TempDir()
-	t.Setenv("HOME", tmp)
-	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmp, ".config"))
-
-	work := profile.Profile{Name: "work", Source: profile.SourceFlag}
-	home := profile.Profile{Name: "home", Source: profile.SourceFlag}
-
-	if err := SetAPITokenForProfile(work, "work-token"); err != nil {
-		t.Fatalf("SetAPITokenForProfile(work): %v", err)
-	}
-	if err := SetAPITokenForProfile(home, "home-token"); err != nil {
-		t.Fatalf("SetAPITokenForProfile(home): %v", err)
-	}
-
-	loadedWork, err := LoadWithMetaForProfile(work, APIOverrides{})
-	if err != nil {
-		t.Fatalf("LoadWithMetaForProfile(work): %v", err)
-	}
-	if loadedWork.Config.API.Token != "work-token" {
-		t.Fatalf("work token = %q, want work-token", loadedWork.Config.API.Token)
-	}
-
-	loadedHome, err := LoadWithMetaForProfile(home, APIOverrides{})
-	if err != nil {
-		t.Fatalf("LoadWithMetaForProfile(home): %v", err)
-	}
-	if loadedHome.Config.API.Token != "home-token" {
-		t.Fatalf("home token = %q, want home-token", loadedHome.Config.API.Token)
-	}
-
-	if loadedWork.Path == loadedHome.Path {
-		t.Fatalf("work and home configs share path: %q", loadedWork.Path)
-	}
-}
-
 func TestSaveSecuresConfigFile(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 
@@ -156,5 +123,134 @@ func TestSaveSecuresConfigFile(t *testing.T) {
 	}
 	if perm := dirInfo.Mode().Perm(); perm != 0o700 {
 		t.Fatalf("config dir perm = %o, want 700", perm)
+	}
+}
+
+func TestPathsForProfileDefaultAndNamed(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	defaultPaths, err := PathsForProfile("")
+	if err != nil {
+		t.Fatalf("PathsForProfile default: %v", err)
+	}
+	if defaultPaths.Profile != DefaultProfile() {
+		t.Fatalf("default profile = %q, want %q", defaultPaths.Profile, DefaultProfile())
+	}
+	if got := filepath.Base(defaultPaths.ConfigPath); got != configFileName {
+		t.Fatalf("default config filename = %q, want %q", got, configFileName)
+	}
+	if got := filepath.Base(defaultPaths.TokenPath); got != tokenFileName {
+		t.Fatalf("default token filename = %q, want %q", got, tokenFileName)
+	}
+
+	workPaths, err := PathsForProfile("work")
+	if err != nil {
+		t.Fatalf("PathsForProfile work: %v", err)
+	}
+	if workPaths.Profile != "work" {
+		t.Fatalf("work profile = %q, want work", workPaths.Profile)
+	}
+	if !strings.Contains(workPaths.ConfigPath, filepath.Join(profilesDirName, "work")) {
+		t.Fatalf("work config path = %q, want profiles/work segment", workPaths.ConfigPath)
+	}
+	if !strings.Contains(workPaths.TokenPath, filepath.Join(profilesDirName, "work")) {
+		t.Fatalf("work token path = %q, want profiles/work segment", workPaths.TokenPath)
+	}
+}
+
+func TestProfileSpecificAPITokensAreIsolated(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	if err := SetAPIToken("default-token"); err != nil {
+		t.Fatalf("SetAPIToken default: %v", err)
+	}
+	if err := SetAPITokenForProfile("work", "work-token"); err != nil {
+		t.Fatalf("SetAPITokenForProfile: %v", err)
+	}
+
+	defaultLoaded, err := LoadWithMeta(APIOverrides{})
+	if err != nil {
+		t.Fatalf("LoadWithMeta default: %v", err)
+	}
+	if defaultLoaded.Config.API.Token != "default-token" {
+		t.Fatalf("default token = %q, want default-token", defaultLoaded.Config.API.Token)
+	}
+
+	workLoaded, err := LoadWithMeta(APIOverrides{Profile: "work"})
+	if err != nil {
+		t.Fatalf("LoadWithMeta work: %v", err)
+	}
+	if workLoaded.Config.API.Token != "work-token" {
+		t.Fatalf("work token = %q, want work-token", workLoaded.Config.API.Token)
+	}
+	if workLoaded.Path == defaultLoaded.Path {
+		t.Fatalf("profile config path should differ from default path")
+	}
+}
+
+func TestResolveProfileRejectsInvalidNames(t *testing.T) {
+	for _, value := range []string{"../oops", "work/team", "two words"} {
+		if _, err := ResolveProfile(value); err == nil {
+			t.Fatalf("ResolveProfile(%q) should fail", value)
+		}
+	}
+}
+
+func TestResolveProfileAllowsEmailNames(t *testing.T) {
+	got, err := ResolveProfile("brian@brianle.xyz")
+	if err != nil {
+		t.Fatalf("ResolveProfile: %v", err)
+	}
+	if got != "brian@brianle.xyz" {
+		t.Fatalf("profile = %q, want brian@brianle.xyz", got)
+	}
+}
+
+func TestResolveSelectedProfileUsesActiveStateWhenUnset(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	if err := SetActiveProfile("work"); err != nil {
+		t.Fatalf("SetActiveProfile: %v", err)
+	}
+
+	profile, err := ResolveSelectedProfile("")
+	if err != nil {
+		t.Fatalf("ResolveSelectedProfile: %v", err)
+	}
+	if profile != "work" {
+		t.Fatalf("profile = %q, want work", profile)
+	}
+}
+
+func TestResolveSelectedProfilePrefersExplicitValue(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	if err := SetActiveProfile("work"); err != nil {
+		t.Fatalf("SetActiveProfile: %v", err)
+	}
+
+	profile, err := ResolveSelectedProfile("personal")
+	if err != nil {
+		t.Fatalf("ResolveSelectedProfile: %v", err)
+	}
+	if profile != "personal" {
+		t.Fatalf("profile = %q, want personal", profile)
+	}
+}
+
+func TestListProfilesIncludesActiveDefaultAndNamedProfiles(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	if err := SetActiveProfile("work"); err != nil {
+		t.Fatalf("SetActiveProfile: %v", err)
+	}
+	if err := SetAPITokenForProfile("personal", "personal-token"); err != nil {
+		t.Fatalf("SetAPITokenForProfile: %v", err)
+	}
+
+	got, err := ListProfiles()
+	if err != nil {
+		t.Fatalf("ListProfiles: %v", err)
+	}
+	want := []string{"work", "default", "personal"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("profiles = %#v, want %#v", got, want)
 	}
 }

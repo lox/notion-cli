@@ -1,30 +1,22 @@
 package cmd
 
-import (
-	"github.com/lox/notion-cli/internal/config"
-	"github.com/lox/notion-cli/internal/profile"
-)
+import "github.com/lox/notion-cli/internal/config"
 
 type Context struct {
+	Profile          string
 	JSON             bool
 	Token            string
 	APIToken         string
 	APIBaseURL       string
 	APINotionVersion string
-	Profile          profile.Profile
 }
 
 type CLI struct {
+	Profile          string `help:"Config profile name" env:"NOTION_CLI_PROFILE"`
 	Token            string `help:"Access token (skips OAuth)" env:"NOTION_ACCESS_TOKEN" hidden:""`
 	APIToken         string `env:"NOTION_API_TOKEN" hidden:""`
 	APIBaseURL       string `env:"NOTION_API_BASE_URL" hidden:""`
 	APINotionVersion string `env:"NOTION_API_NOTION_VERSION" hidden:""`
-	// Profile intentionally does not use Kong's env:"NOTION_CLI_PROFILE" tag.
-	// profile.Resolve needs to see the flag value and env variable as
-	// separate inputs so auth status can attribute the selection to
-	// --profile vs NOTION_CLI_PROFILE; Kong would merge them into one value
-	// and we'd always report SourceFlag.
-	Profile string `help:"Notion account profile to use (also reads $NOTION_CLI_PROFILE)" name:"profile"`
 
 	Auth    AuthCmd    `cmd:"" help:"Authentication commands"`
 	Page    PageCmd    `cmd:"" help:"Page commands"`
@@ -49,6 +41,7 @@ func officialAPIOverrides(ctx *Context) config.APIOverrides {
 		return config.APIOverrides{}
 	}
 	return config.APIOverrides{
+		Profile:       ctx.Profile,
 		BaseURL:       ctx.APIBaseURL,
 		NotionVersion: ctx.APINotionVersion,
 		Token:         ctx.APIToken,

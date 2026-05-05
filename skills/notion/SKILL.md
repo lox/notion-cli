@@ -50,15 +50,16 @@ For CI/headless environments, set `NOTION_API_TOKEN`.
 
 ### Multiple accounts
 
-Every command accepts `--profile <name>` (or `NOTION_CLI_PROFILE`) to target a specific Notion account. Named profiles keep credentials isolated under `~/.config/notion-cli/<profile>/`; the implicit default profile uses the existing top-level paths.
+Every command accepts `--profile <name>` (or `NOTION_CLI_PROFILE`) to target a specific Notion account. Named profiles keep credentials isolated under `~/.config/notion-cli/profiles/<profile>/`; the implicit default profile uses the existing top-level paths.
 
 ```bash
 notion-cli auth login --profile work
 notion-cli page list --profile work
 export NOTION_CLI_PROFILE=work  # pin for the shell session
+notion-cli auth use work         # make work the default profile
 ```
 
-Resolution precedence: `--profile` > `NOTION_CLI_PROFILE` > `default_profile` in `~/.config/notion-cli/settings.json` > implicit top-level default. If none resolve, the CLI fails with `No profile specified.` instead of acting silently.
+Resolution precedence: `--profile` > `NOTION_CLI_PROFILE` > `notion-cli auth use <name>` > implicit default profile.
 
 ## Available Commands
 

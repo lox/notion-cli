@@ -31,7 +31,7 @@ func (c *CommentListCmd) Run(ctx *Context) error {
 }
 
 func runCommentList(ctx *Context, page string, includeResolved bool) error {
-	client, err := cli.RequireClient(ctx.Profile)
+	client, err := cli.RequireClient()
 	if err != nil {
 		return err
 	}
@@ -266,7 +266,7 @@ func (c *CommentCreateCmd) Run(ctx *Context) error {
 }
 
 func runCommentCreate(ctx *Context, page, content string) error {
-	client, err := cli.RequireClient(ctx.Profile)
+	client, err := cli.RequireClient()
 	if err != nil {
 		return err
 	}

@@ -1,15 +1,12 @@
 package main
 
 import (
-	"errors"
-	"fmt"
 	"os"
-	"strings"
 
 	"github.com/alecthomas/kong"
 	"github.com/lox/notion-cli/cmd"
 	"github.com/lox/notion-cli/internal/cli"
-	"github.com/lox/notion-cli/internal/profile"
+	"github.com/lox/notion-cli/internal/config"
 )
 
 var version = "dev"
@@ -27,33 +24,18 @@ func main() {
 		kong.UsageOnError(),
 		kong.Vars{"version": version},
 	)
-
-	active, profileErr := profile.Resolve(c.Profile)
-	if profileErr != nil {
-		hasAccessToken := strings.TrimSpace(c.Token) != ""
-		if !hasAccessToken || !errors.Is(profileErr, profile.ErrNoProfile) {
-			if errors.Is(profileErr, profile.ErrNoProfile) {
-				_, _ = fmt.Fprintln(os.Stderr, "\u2717 No profile specified. Pass --profile <name> or set NOTION_CLI_PROFILE.")
-			} else {
-				_, _ = fmt.Fprintf(os.Stderr, "\u2717 %s\n", profileErr)
-			}
-			os.Exit(1)
-		}
-		// Headless path: NOTION_ACCESS_TOKEN authenticates MCP directly, so
-		// the profile gate can be skipped. Profile-scoped operations (like
-		// auth api setup) will still use the implicit default layout.
-		active = profile.Profile{Name: profile.DefaultName, Source: profile.SourceDefault}
-	}
+	profile, err := config.ResolveSelectedProfile(c.Profile)
+	ctx.FatalIfErrorf(err)
 	cli.SetAccessToken(c.Token)
-
-	runErr := ctx.Run(&cmd.Context{
+	cli.SetProfile(profile)
+	err = ctx.Run(&cmd.Context{
+		Profile:          profile,
 		Token:            c.Token,
 		APIToken:         c.APIToken,
 		APIBaseURL:       c.APIBaseURL,
 		APINotionVersion: c.APINotionVersion,
-		Profile:          active,
 	})
-	ctx.FatalIfErrorf(runErr)
+	ctx.FatalIfErrorf(err)
 	os.Exit(0)
 }
 

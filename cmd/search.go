@@ -21,11 +21,10 @@ func (c *SearchCmd) Run(ctx *Context) error {
 }
 
 func runSearch(ctx *Context, query string, limit int, searchMode string) error {
-	client, err := cli.RequireClient(ctx.Profile)
+	client, err := cli.RequireClient()
 	if err != nil {
 		return err
 	}
-	defer func() { _ = client.Close() }()
 
 	mode := "workspace_search"
 	if searchMode == "ai" {

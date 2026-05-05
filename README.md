@@ -188,26 +188,24 @@ notion-cli page list --profile work
 # Pin a profile for the shell session
 export NOTION_CLI_PROFILE=work
 
-# Pin a profile for every invocation (survives across shells)
-cat > ~/.config/notion-cli/settings.json <<'JSON'
-{"default_profile": "work"}
-JSON
+# Make a profile the default for future invocations
+notion-cli auth use work
 ```
 
 Profile resolution, highest priority first:
 
 1. `--profile <name>` flag
 2. `NOTION_CLI_PROFILE` environment variable
-3. `default_profile` in `~/.config/notion-cli/settings.json`
-4. Implicit default (the pre-existing top-level `~/.config/notion-cli/{token,config}.json`)
+3. Active profile from `notion-cli auth use <name>`
+4. Implicit default profile
 
-When none of those resolve (no top-level files, no settings, no flag, no env), every command fails up front with `No profile specified. Pass --profile <name> or set NOTION_CLI_PROFILE.` rather than silently treating the caller as unauthenticated. If you want to force `--profile` on every invocation (for example to keep an agent from ever touching the wrong workspace), remove the top-level `{token,config}.json`.
+The default profile keeps using the existing top-level `~/.config/notion-cli/{token,config}.json` files, so existing single-account installs need no migration. `notion-cli auth use <name>` stores the active profile in `~/.config/notion-cli/state.json`.
 
-Profile names must match `^[a-z0-9][a-z0-9_-]*$`.
+Profile names may contain letters, numbers, at signs, dots, underscores, and hyphens.
 
-Named profiles store their credentials under `~/.config/notion-cli/<profile>/{token,config}.json`. The implicit default profile keeps using the existing top-level paths, so existing single-account installs need no migration.
+Named profiles store their credentials under `~/.config/notion-cli/profiles/<profile>/{token,config}.json`.
 
-`notion-cli auth status` always prints the active profile and where it was resolved from, so you can verify which account the CLI is about to hit.
+`notion-cli auth status` prints the selected profile and token path, and `notion-cli auth list` shows all known profiles with OAuth and API-token status.
 
 ## Environment Variables
 
