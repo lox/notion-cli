@@ -123,12 +123,31 @@ func PathsForProfile(profile string) (ProfilePaths, error) {
 	if resolvedProfile != defaultProfileName {
 		profileDir = filepath.Join(baseDir, profilesDirName, resolvedProfile)
 	}
+	tokenPath := filepath.Join(profileDir, tokenFileName)
+	if resolvedProfile == defaultProfileName {
+		tokenPath, err = legacyDefaultTokenPath()
+		if err != nil {
+			return ProfilePaths{}, err
+		}
+	}
 
 	return ProfilePaths{
 		Profile:    resolvedProfile,
 		ConfigPath: filepath.Join(profileDir, configFileName),
-		TokenPath:  filepath.Join(profileDir, tokenFileName),
+		TokenPath:  tokenPath,
 	}, nil
+}
+
+// legacyDefaultTokenPath preserves the pre-profile OAuth token location.
+// API config files use ConfigDir, but upstream OAuth tokens historically
+// lived under ~/.config/notion-cli even on platforms where os.UserConfigDir
+// resolves somewhere else.
+func legacyDefaultTokenPath() (string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(homeDir, ".config", configDirName, tokenFileName), nil
 }
 
 func DefaultProfile() string {

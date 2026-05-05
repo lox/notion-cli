@@ -206,8 +206,8 @@ func (c *AuthListCmd) Run(ctx *Context) error {
 		}
 		_, _ = labelStyle.Print("  Token path: ")
 		fmt.Println(row.TokenPath)
-		_, _ = labelStyle.Print("  Config path:")
-		fmt.Println(" " + row.ConfigPath)
+		_, _ = labelStyle.Print("  Config path: ")
+		fmt.Println(row.ConfigPath)
 		if i < len(rows)-1 {
 			fmt.Println()
 		}

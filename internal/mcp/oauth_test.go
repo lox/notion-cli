@@ -185,6 +185,43 @@ func TestRefreshTokenInvalidGrantRequiresLoginWhenNoNewerTokenExists(t *testing.
 	}
 }
 
+func TestRefreshTokenInvalidGrantDoesNotAcceptSameFreshToken(t *testing.T) {
+	isolateMCPConfig(t)
+
+	store, err := NewFileTokenStore("work")
+	if err != nil {
+		t.Fatalf("NewFileTokenStore: %v", err)
+	}
+	if err := store.SaveClientID(context.Background(), "client-123"); err != nil {
+		t.Fatalf("SaveClientID: %v", err)
+	}
+	if err := store.SaveToken(context.Background(), &transport.Token{
+		AccessToken:  "fresh-access",
+		TokenType:    "bearer",
+		RefreshToken: "fresh-refresh",
+		ExpiresAt:    time.Now().Add(time.Hour),
+	}); err != nil {
+		t.Fatalf("SaveToken: %v", err)
+	}
+
+	oldRefresh := refreshOAuthToken
+	t.Cleanup(func() {
+		refreshOAuthToken = oldRefresh
+	})
+
+	refreshOAuthToken = func(context.Context, *FileTokenStore, *transport.Token) (*transport.Token, error) {
+		return nil, fmt.Errorf("refresh token: %w", transport.OAuthError{ErrorCode: "invalid_grant"})
+	}
+
+	_, err = RefreshToken(context.Background(), store)
+	if err == nil {
+		t.Fatal("RefreshToken returned nil error, want browser login required")
+	}
+	if got := err.Error(); !strings.Contains(got, "browser login required") {
+		t.Fatalf("error = %q, want browser login required", got)
+	}
+}
+
 func saveExpiredToken(t *testing.T, store *FileTokenStore) {
 	t.Helper()
 

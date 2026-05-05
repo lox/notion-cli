@@ -199,7 +199,7 @@ Profile resolution, highest priority first:
 3. Active profile from `notion-cli auth use <name>`
 4. Implicit default profile
 
-The default profile keeps using the existing top-level `~/.config/notion-cli/{token,config}.json` files, so existing single-account installs need no migration. `notion-cli auth use <name>` stores the active profile in `~/.config/notion-cli/state.json`.
+The default profile keeps using the existing OAuth token path, so existing single-account installs need no migration. `notion-cli auth use <name>` stores the active profile in the cross-profile config directory.
 
 Profile names may contain letters, numbers, at signs, dots, underscores, and hyphens.
 

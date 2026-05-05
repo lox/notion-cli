@@ -150,6 +150,9 @@ func TestPathsForProfileDefaultAndNamed(t *testing.T) {
 	if got := filepath.Base(defaultPaths.TokenPath); got != tokenFileName {
 		t.Fatalf("default token filename = %q, want %q", got, tokenFileName)
 	}
+	if !strings.Contains(defaultPaths.TokenPath, filepath.Join(".config", configDirName, tokenFileName)) {
+		t.Fatalf("default token path = %q, want legacy .config/notion-cli path", defaultPaths.TokenPath)
+	}
 
 	workPaths, err := PathsForProfile("work")
 	if err != nil {

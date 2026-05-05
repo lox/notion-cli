@@ -232,7 +232,7 @@ func refreshTokenLocked(ctx context.Context, tokenStore *FileTokenStore, force b
 		if err != nil {
 			if isInvalidGrantError(err) {
 				latest, latestErr := tokenStore.GetToken(ctx)
-				if latestErr == nil && tokenFresh(latest) {
+				if latestErr == nil && tokenFresh(latest) && !sameToken(latest, token) {
 					refreshed = latest
 					return nil
 				}
@@ -260,6 +260,15 @@ func tokenFresh(token *transport.Token) bool {
 	return token != nil &&
 		token.AccessToken != "" &&
 		(token.ExpiresAt.IsZero() || token.ExpiresAt.After(time.Now().Add(refreshSkew)))
+}
+
+func sameToken(a, b *transport.Token) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return a.AccessToken == b.AccessToken &&
+		a.RefreshToken == b.RefreshToken &&
+		a.ExpiresAt.Equal(b.ExpiresAt)
 }
 
 func isInvalidGrantError(err error) bool {
