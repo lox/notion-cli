@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -11,8 +12,16 @@ import (
 	"github.com/mark3labs/mcp-go/client/transport"
 )
 
+func isolateAuthConfig(t *testing.T) {
+	t.Helper()
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+}
+
 func TestAuthUsePersistsActiveProfile(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	isolateAuthConfig(t)
 
 	cmd := &AuthUseCmd{Profile: "work"}
 	stdout := captureStdout(t, func() {
@@ -34,7 +43,7 @@ func TestAuthUsePersistsActiveProfile(t *testing.T) {
 }
 
 func TestAuthListJSONShowsProfilesAndActiveState(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	isolateAuthConfig(t)
 
 	if err := config.SetActiveProfile("work"); err != nil {
 		t.Fatalf("SetActiveProfile: %v", err)
@@ -76,7 +85,7 @@ func TestAuthListJSONShowsProfilesAndActiveState(t *testing.T) {
 }
 
 func TestAuthStatusJSONReportsMissingTokenForProfile(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	isolateAuthConfig(t)
 
 	cmd := &AuthStatusCmd{JSON: true}
 	stdout := captureStdout(t, func() {

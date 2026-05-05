@@ -8,8 +8,16 @@ import (
 	"testing"
 )
 
+func isolateConfigDir(t *testing.T) {
+	t.Helper()
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+}
+
 func TestLoadWithMetaDefaults(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	isolateConfigDir(t)
 
 	loaded, err := LoadWithMeta(APIOverrides{})
 	if err != nil {
@@ -30,7 +38,7 @@ func TestLoadWithMetaDefaults(t *testing.T) {
 }
 
 func TestLoadWithMetaReportsConfigTokenSource(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	isolateConfigDir(t)
 	if err := SetAPIToken("secret-token"); err != nil {
 		t.Fatalf("SetAPIToken: %v", err)
 	}
@@ -48,7 +56,7 @@ func TestLoadWithMetaReportsConfigTokenSource(t *testing.T) {
 }
 
 func TestLoadWithMetaEnvOverrideWins(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	isolateConfigDir(t)
 	if err := SetAPIToken("config-token"); err != nil {
 		t.Fatalf("SetAPIToken: %v", err)
 	}
@@ -75,7 +83,7 @@ func TestLoadWithMetaEnvOverrideWins(t *testing.T) {
 }
 
 func TestUnsetAPITokenClearsStoredToken(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	isolateConfigDir(t)
 	if err := SetAPIToken("secret-token"); err != nil {
 		t.Fatalf("SetAPIToken: %v", err)
 	}
@@ -96,7 +104,7 @@ func TestUnsetAPITokenClearsStoredToken(t *testing.T) {
 }
 
 func TestSaveSecuresConfigFile(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	isolateConfigDir(t)
 
 	cfg := Default()
 	cfg.API.Token = "secret-token"
@@ -127,7 +135,7 @@ func TestSaveSecuresConfigFile(t *testing.T) {
 }
 
 func TestPathsForProfileDefaultAndNamed(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	isolateConfigDir(t)
 
 	defaultPaths, err := PathsForProfile("")
 	if err != nil {
@@ -159,7 +167,7 @@ func TestPathsForProfileDefaultAndNamed(t *testing.T) {
 }
 
 func TestProfileSpecificAPITokensAreIsolated(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	isolateConfigDir(t)
 
 	if err := SetAPIToken("default-token"); err != nil {
 		t.Fatalf("SetAPIToken default: %v", err)
@@ -207,7 +215,7 @@ func TestResolveProfileAllowsEmailNames(t *testing.T) {
 }
 
 func TestResolveSelectedProfileUsesActiveStateWhenUnset(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	isolateConfigDir(t)
 	if err := SetActiveProfile("work"); err != nil {
 		t.Fatalf("SetActiveProfile: %v", err)
 	}
@@ -222,7 +230,7 @@ func TestResolveSelectedProfileUsesActiveStateWhenUnset(t *testing.T) {
 }
 
 func TestResolveSelectedProfilePrefersExplicitValue(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	isolateConfigDir(t)
 	if err := SetActiveProfile("work"); err != nil {
 		t.Fatalf("SetActiveProfile: %v", err)
 	}
@@ -237,7 +245,7 @@ func TestResolveSelectedProfilePrefersExplicitValue(t *testing.T) {
 }
 
 func TestListProfilesIncludesActiveDefaultAndNamedProfiles(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	isolateConfigDir(t)
 	if err := SetActiveProfile("work"); err != nil {
 		t.Fatalf("SetActiveProfile: %v", err)
 	}

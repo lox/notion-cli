@@ -13,7 +13,7 @@ import (
 )
 
 func TestNewFileTokenStoreUsesProfilePath(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	isolateMCPConfig(t)
 
 	store, err := NewFileTokenStore("work")
 	if err != nil {
@@ -29,7 +29,7 @@ func TestNewFileTokenStoreUsesProfilePath(t *testing.T) {
 }
 
 func TestSaveTokenWritesAtomicallyAndPreservesClientID(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	isolateMCPConfig(t)
 
 	store, err := NewFileTokenStore("work")
 	if err != nil {

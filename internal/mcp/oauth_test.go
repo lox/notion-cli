@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -12,8 +13,16 @@ import (
 	"github.com/mark3labs/mcp-go/client/transport"
 )
 
+func isolateMCPConfig(t *testing.T) {
+	t.Helper()
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+}
+
 func TestRefreshTokenSkipsRefreshWhenAnotherCallerAlreadyRefreshed(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	isolateMCPConfig(t)
 
 	store, err := NewFileTokenStore("work")
 	if err != nil {
@@ -68,7 +77,7 @@ func TestRefreshTokenSkipsRefreshWhenAnotherCallerAlreadyRefreshed(t *testing.T)
 }
 
 func TestRefreshTokenInvalidGrantUsesNewerSavedToken(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	isolateMCPConfig(t)
 
 	store, err := NewFileTokenStore("work")
 	if err != nil {
@@ -103,7 +112,7 @@ func TestRefreshTokenInvalidGrantUsesNewerSavedToken(t *testing.T) {
 }
 
 func TestRefreshTokenForcesRefreshWhenTokenIsFresh(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	isolateMCPConfig(t)
 
 	store, err := NewFileTokenStore("work")
 	if err != nil {
@@ -150,7 +159,7 @@ func TestRefreshTokenForcesRefreshWhenTokenIsFresh(t *testing.T) {
 }
 
 func TestRefreshTokenInvalidGrantRequiresLoginWhenNoNewerTokenExists(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	isolateMCPConfig(t)
 
 	store, err := NewFileTokenStore("work")
 	if err != nil {
