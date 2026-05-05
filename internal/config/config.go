@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"unicode"
 )
 
 const (
@@ -159,16 +158,34 @@ func ResolveProfile(profile string) (string, error) {
 	if normalized == "" {
 		return defaultProfileName, nil
 	}
-	if normalized == "." || normalized == ".." {
-		return "", fmt.Errorf("invalid profile %q", profile)
+
+	runes := []rune(normalized)
+	if !isProfileEndpoint(runes[0]) || !isProfileEndpoint(runes[len(runes)-1]) {
+		return "", fmt.Errorf("invalid profile %q: start and end with a lowercase letter or number", profile)
 	}
-	for _, r := range normalized {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '.' || r == '_' || r == '-' || r == '@' {
+	for _, r := range runes {
+		if isProfileChar(r) {
 			continue
 		}
-		return "", fmt.Errorf("invalid profile %q: use letters, numbers, at sign, dot, underscore, and hyphen", profile)
+		return "", fmt.Errorf("invalid profile %q: use lowercase letters, numbers, at sign, dot, underscore, and hyphen", profile)
 	}
 	return normalized, nil
+}
+
+func isProfileEndpoint(r rune) bool {
+	return isLowercaseASCII(r) || isDigitASCII(r)
+}
+
+func isProfileChar(r rune) bool {
+	return isLowercaseASCII(r) || isDigitASCII(r) || r == '.' || r == '_' || r == '-' || r == '@'
+}
+
+func isLowercaseASCII(r rune) bool {
+	return r >= 'a' && r <= 'z'
+}
+
+func isDigitASCII(r rune) bool {
+	return r >= '0' && r <= '9'
 }
 
 func LoadState() (State, error) {

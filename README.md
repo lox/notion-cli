@@ -201,7 +201,7 @@ Profile resolution, highest priority first:
 
 The default profile keeps using the existing OAuth token path, so existing single-account installs need no migration. `notion-cli auth use <name>` stores the active profile in the cross-profile config directory.
 
-Profile names may contain letters, numbers, at signs, dots, underscores, and hyphens.
+Profile names must start and end with a lowercase ASCII letter or number. They may contain lowercase letters, numbers, at signs, dots, underscores, and hyphens.
 
 Named profiles store their credentials under `~/.config/notion-cli/profiles/<profile>/{token,config}.json`.
 

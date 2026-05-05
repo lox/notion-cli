@@ -200,20 +200,31 @@ func TestProfileSpecificAPITokensAreIsolated(t *testing.T) {
 }
 
 func TestResolveProfileRejectsInvalidNames(t *testing.T) {
-	for _, value := range []string{"../oops", "work/team", "two words"} {
+	for _, value := range []string{
+		"../oops",
+		"work/team",
+		"two words",
+		"Work",
+		".work",
+		"work.",
+		"work-",
+		"ümlaut",
+	} {
 		if _, err := ResolveProfile(value); err == nil {
 			t.Fatalf("ResolveProfile(%q) should fail", value)
 		}
 	}
 }
 
-func TestResolveProfileAllowsEmailNames(t *testing.T) {
-	got, err := ResolveProfile("brian@brianle.xyz")
-	if err != nil {
-		t.Fatalf("ResolveProfile: %v", err)
-	}
-	if got != "brian@brianle.xyz" {
-		t.Fatalf("profile = %q, want brian@brianle.xyz", got)
+func TestResolveProfileAllowsPortableNames(t *testing.T) {
+	for _, value := range []string{"work", "work-1", "personal_2", "brian@brianle.xyz"} {
+		got, err := ResolveProfile(value)
+		if err != nil {
+			t.Fatalf("ResolveProfile(%q): %v", value, err)
+		}
+		if got != value {
+			t.Fatalf("profile = %q, want %q", got, value)
+		}
 	}
 }
 
