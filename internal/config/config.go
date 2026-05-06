@@ -100,28 +100,28 @@ func StatePath() (string, error) {
 }
 
 func PathForProfile(profile string) (string, error) {
-	paths, err := PathsForProfile(profile)
+	resolvedProfile, err := ResolveProfile(profile)
 	if err != nil {
 		return "", err
 	}
-	return paths.ConfigPath, nil
+	profileDir, err := profileBaseDir(resolvedProfile)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(profileDir, configFileName), nil
 }
 
 func PathsForProfile(profile string) (ProfilePaths, error) {
-	baseDir, err := ConfigDir()
-	if err != nil {
-		return ProfilePaths{}, err
-	}
-
 	resolvedProfile, err := ResolveProfile(profile)
 	if err != nil {
 		return ProfilePaths{}, err
 	}
 
-	profileDir := baseDir
-	if resolvedProfile != defaultProfileName {
-		profileDir = filepath.Join(baseDir, profilesDirName, resolvedProfile)
+	profileDir, err := profileBaseDir(resolvedProfile)
+	if err != nil {
+		return ProfilePaths{}, err
 	}
+
 	tokenPath := filepath.Join(profileDir, tokenFileName)
 	if resolvedProfile == defaultProfileName {
 		tokenPath, err = legacyDefaultTokenPath()
@@ -135,6 +135,21 @@ func PathsForProfile(profile string) (ProfilePaths, error) {
 		ConfigPath: filepath.Join(profileDir, configFileName),
 		TokenPath:  tokenPath,
 	}, nil
+}
+
+// profileBaseDir returns the directory that holds a profile's config file.
+// It only depends on ConfigDir (XDG_CONFIG_HOME or its platform fallback)
+// and never resolves HOME, so config-only flows keep working in environments
+// where os.UserHomeDir is unavailable (e.g. minimal CI containers).
+func profileBaseDir(resolvedProfile string) (string, error) {
+	baseDir, err := ConfigDir()
+	if err != nil {
+		return "", err
+	}
+	if resolvedProfile == defaultProfileName {
+		return baseDir, nil
+	}
+	return filepath.Join(baseDir, profilesDirName, resolvedProfile), nil
 }
 
 // legacyDefaultTokenPath preserves the pre-profile OAuth token location.

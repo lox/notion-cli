@@ -276,3 +276,31 @@ func TestListProfilesIncludesActiveDefaultAndNamedProfiles(t *testing.T) {
 		t.Fatalf("profiles = %#v, want %#v", got, want)
 	}
 }
+
+func TestPathForProfileDefaultDoesNotRequireHome(t *testing.T) {
+	isolateConfigDir(t)
+	t.Setenv("HOME", "")
+
+	// macOS and Windows resolve UserConfigDir from HOME, so this regression
+	// only surfaces on platforms (Linux containers, etc.) where ConfigDir
+	// can be satisfied via XDG_CONFIG_HOME without HOME.
+	if _, err := os.UserConfigDir(); err != nil {
+		t.Skipf("UserConfigDir requires HOME on this platform: %v", err)
+	}
+
+	path, err := PathForProfile("")
+	if err != nil {
+		t.Fatalf("PathForProfile(default): %v", err)
+	}
+	if path == "" {
+		t.Fatalf("expected non-empty config path for default profile")
+	}
+
+	path, err = PathForProfile("work")
+	if err != nil {
+		t.Fatalf("PathForProfile(work): %v", err)
+	}
+	if path == "" {
+		t.Fatalf("expected non-empty config path for named profile")
+	}
+}
