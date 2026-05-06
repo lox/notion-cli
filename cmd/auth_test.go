@@ -131,6 +131,12 @@ func TestAuthStatusJSONReportsValidWhenAccessExpiredButRefreshAvailable(t *testi
 	if !strings.Contains(stdout, `"authenticated": true`) {
 		t.Fatalf("expected authenticated true when refresh token present, got: %s", stdout)
 	}
+	if !strings.Contains(stdout, `"has_oauth_token": true`) {
+		t.Fatalf("expected has_oauth_token field, got: %s", stdout)
+	}
+	if !strings.Contains(stdout, `"oauth_expires_at":`) {
+		t.Fatalf("expected oauth_expires_at field, got: %s", stdout)
+	}
 }
 
 func TestAuthStatusJSONReportsLoginRequiredWithoutRefreshToken(t *testing.T) {

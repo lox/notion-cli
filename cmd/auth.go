@@ -117,14 +117,17 @@ func (c *AuthStatusCmd) Run(ctx *Context) error {
 
 	if ctx.JSON {
 		payload := map[string]any{
-			"authenticated": status.OAuthStatus == "valid",
-			"profile":       status.Profile,
-			"has_token":     status.HasOAuthToken,
-			"token_path":    status.TokenPath,
-			"oauth_status":  status.OAuthStatus,
+			"authenticated":   status.OAuthStatus == "valid",
+			"profile":         status.Profile,
+			"active":          status.Active,
+			"has_oauth_token": status.HasOAuthToken,
+			"oauth_status":    status.OAuthStatus,
+			"has_api_token":   status.HasAPIToken,
+			"token_path":      status.TokenPath,
+			"config_path":     status.ConfigPath,
 		}
 		if status.OAuthExpiresAt != nil {
-			payload["expires_at"] = status.OAuthExpiresAt
+			payload["oauth_expires_at"] = status.OAuthExpiresAt
 		}
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
