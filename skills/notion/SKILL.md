@@ -30,8 +30,8 @@ The CLI uses OAuth authentication for MCP-backed commands. On first use, it open
 
 ```bash
 notion-cli auth login      # Authenticate with Notion
-notion-cli auth status     # Check authentication status (also shows active profile)
-notion-cli auth refresh    # Refresh token if status shows expired token
+notion-cli auth status     # Show active profile and OAuth state (diagnostic)
+notion-cli auth refresh    # Force-refresh; commands auto-refresh on use, so rarely needed
 notion-cli auth logout     # Clear credentials
 ```
 
@@ -204,6 +204,6 @@ notion-cli search "api" --json | jq '.[] | .title'
 6. **Inline comments by default** - `page view` includes open page comments and inline block discussions unless `--no-comments` is set
 7. **Raw output** - Use `--raw` with `page view` to see the original Notion markup
 8. **JSON for parsing** - Use `--json` when you need to extract specific fields, including the `Comments` array from `page view`
-9. **Auth preflight** - Run `notion-cli auth status --json` before a multi-step workflow and refresh/login if needed
+9. **No auth preflight** - Just run the command; the CLI auto-refreshes tokens on use. `notion-cli auth status` and `notion-cli auth list` are diagnostic surfaces, not health gates - do not poll them as a sanity check before each call. Only run `notion-cli auth login` if a real command returns an authentication error.
 10. **API fallback preflight** - Run `notion-cli auth api verify` before workflows that need local image upload
 11. **Error handling** - If a targeted `page edit` call fails, rerun with `--replace` as a safe fallback

@@ -135,8 +135,8 @@ func (c *AuthStatusCmd) Run(ctx *Context) error {
 	switch status.OAuthStatus {
 	case "valid":
 		output.PrintSuccess("Authenticated")
-	case "expired":
-		output.PrintWarning("Token expired")
+	case "login_required":
+		output.PrintWarning("Login required")
 	default:
 		output.PrintWarning("Not authenticated")
 	}
@@ -151,7 +151,7 @@ func (c *AuthStatusCmd) Run(ctx *Context) error {
 		_, _ = labelStyle.Print("Expires:    ")
 		fmt.Println(status.OAuthExpiresAt.Format("2 Jan 2006 15:04"))
 	}
-	if status.OAuthStatus == "missing" {
+	if status.OAuthStatus == "missing" || status.OAuthStatus == "login_required" {
 		_, _ = fmt.Fprintln(os.Stdout, "Run 'notion-cli auth login' to authenticate this profile.")
 	}
 
@@ -234,7 +234,7 @@ func (c *AuthUseCmd) Run(ctx *Context) error {
 
 	output.PrintSuccess("Active profile updated")
 	fmt.Printf("Profile: %s\n", status.Profile)
-	if status.OAuthStatus == "missing" {
+	if status.OAuthStatus == "missing" || status.OAuthStatus == "login_required" {
 		fmt.Println("Run 'notion-cli auth login' to authenticate this profile.")
 	}
 	if !status.HasAPIToken {
@@ -524,10 +524,17 @@ func inspectProfileStatus(profile string) (authProfileStatus, error) {
 	expiresAt := token.ExpiresAt
 	status.OAuthExpiresAt = &expiresAt
 	if status.HasOAuthToken {
-		if token.IsExpired() {
-			status.OAuthStatus = "expired"
-		} else {
+		switch {
+		case !token.IsExpired():
 			status.OAuthStatus = "valid"
+		case strings.TrimSpace(token.RefreshToken) != "":
+			// Access token is past expiry but a refresh token is on file,
+			// so the next command will silently refresh. Surface this as
+			// valid; the underlying expiry is still in OAuthExpiresAt for
+			// callers that want it.
+			status.OAuthStatus = "valid"
+		default:
+			status.OAuthStatus = "login_required"
 		}
 	}
 	return status, nil

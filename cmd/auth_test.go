@@ -101,3 +101,64 @@ func TestAuthStatusJSONReportsMissingTokenForProfile(t *testing.T) {
 		t.Fatalf("unexpected output: %s", stdout)
 	}
 }
+
+func TestAuthStatusJSONReportsValidWhenAccessExpiredButRefreshAvailable(t *testing.T) {
+	isolateAuthConfig(t)
+
+	store, err := mcp.NewFileTokenStore("work")
+	if err != nil {
+		t.Fatalf("NewFileTokenStore: %v", err)
+	}
+	if err := store.SaveToken(context.Background(), &transport.Token{
+		AccessToken:  "stale-access",
+		TokenType:    "Bearer",
+		RefreshToken: "rotating-refresh",
+		ExpiresAt:    time.Now().Add(-time.Hour),
+	}); err != nil {
+		t.Fatalf("SaveToken: %v", err)
+	}
+
+	cmd := &AuthStatusCmd{JSON: true}
+	stdout := captureStdout(t, func() {
+		if err := cmd.Run(&Context{Profile: "work"}); err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+	})
+
+	if !strings.Contains(stdout, `"oauth_status": "valid"`) {
+		t.Fatalf("expected valid status when refresh token present, got: %s", stdout)
+	}
+	if !strings.Contains(stdout, `"authenticated": true`) {
+		t.Fatalf("expected authenticated true when refresh token present, got: %s", stdout)
+	}
+}
+
+func TestAuthStatusJSONReportsLoginRequiredWithoutRefreshToken(t *testing.T) {
+	isolateAuthConfig(t)
+
+	store, err := mcp.NewFileTokenStore("work")
+	if err != nil {
+		t.Fatalf("NewFileTokenStore: %v", err)
+	}
+	if err := store.SaveToken(context.Background(), &transport.Token{
+		AccessToken: "stale-access",
+		TokenType:   "Bearer",
+		ExpiresAt:   time.Now().Add(-time.Hour),
+	}); err != nil {
+		t.Fatalf("SaveToken: %v", err)
+	}
+
+	cmd := &AuthStatusCmd{JSON: true}
+	stdout := captureStdout(t, func() {
+		if err := cmd.Run(&Context{Profile: "work"}); err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+	})
+
+	if !strings.Contains(stdout, `"oauth_status": "login_required"`) {
+		t.Fatalf("expected login_required without refresh token, got: %s", stdout)
+	}
+	if !strings.Contains(stdout, `"authenticated": false`) {
+		t.Fatalf("expected authenticated false without refresh token, got: %s", stdout)
+	}
+}
