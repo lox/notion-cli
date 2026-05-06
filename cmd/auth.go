@@ -524,9 +524,9 @@ func inspectProfileStatus(profile string) (authProfileStatus, error) {
 	}
 
 	status.HasOAuthToken = strings.TrimSpace(token.AccessToken) != ""
-	expiresAt := token.ExpiresAt
-	status.OAuthExpiresAt = &expiresAt
 	if status.HasOAuthToken {
+		expiresAt := token.ExpiresAt
+		status.OAuthExpiresAt = &expiresAt
 		switch {
 		case !token.IsExpired():
 			status.OAuthStatus = "valid"

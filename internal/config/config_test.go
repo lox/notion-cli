@@ -216,6 +216,24 @@ func TestResolveProfileRejectsInvalidNames(t *testing.T) {
 	}
 }
 
+func TestResolveProfileRejectsWindowsReservedNames(t *testing.T) {
+	for _, value := range []string{
+		"con",
+		"prn",
+		"aux",
+		"nul",
+		"com1",
+		"com9",
+		"lpt1",
+		"lpt9",
+		"con.txt",
+	} {
+		if _, err := ResolveProfile(value); err == nil {
+			t.Fatalf("ResolveProfile(%q) should fail as Windows reserved", value)
+		}
+	}
+}
+
 func TestResolveProfileAllowsPortableNames(t *testing.T) {
 	for _, value := range []string{"work", "work-1", "personal_2", "brian@brianle.xyz"} {
 		got, err := ResolveProfile(value)

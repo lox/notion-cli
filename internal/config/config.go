@@ -184,7 +184,33 @@ func ResolveProfile(profile string) (string, error) {
 		}
 		return "", fmt.Errorf("invalid profile %q: use lowercase letters, numbers, at sign, dot, underscore, and hyphen", profile)
 	}
+	if isWindowsReservedName(normalized) {
+		return "", fmt.Errorf("invalid profile %q: name is reserved on Windows", profile)
+	}
 	return normalized, nil
+}
+
+// isWindowsReservedName reports whether the (already lowercased) profile
+// matches a Windows reserved device name. Windows refuses to create files or
+// directories with these basenames, so allowing them here would leave
+// profiles that work on macOS/Linux but break on Windows the moment a
+// command tries to read or write the profile's token/config files.
+func isWindowsReservedName(name string) bool {
+	base := name
+	if dot := strings.IndexByte(base, '.'); dot >= 0 {
+		base = base[:dot]
+	}
+	switch base {
+	case "con", "prn", "aux", "nul":
+		return true
+	}
+	if len(base) == 4 && (base[:3] == "com" || base[:3] == "lpt") {
+		c := base[3]
+		if c >= '1' && c <= '9' {
+			return true
+		}
+	}
+	return false
 }
 
 func isProfileEndpoint(r rune) bool {

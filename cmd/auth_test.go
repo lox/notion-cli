@@ -139,6 +139,35 @@ func TestAuthStatusJSONReportsValidWhenAccessExpiredButRefreshAvailable(t *testi
 	}
 }
 
+func TestAuthStatusJSONOmitsExpiryWhenAccessTokenMissing(t *testing.T) {
+	isolateAuthConfig(t)
+
+	store, err := mcp.NewFileTokenStore("work")
+	if err != nil {
+		t.Fatalf("NewFileTokenStore: %v", err)
+	}
+	if err := store.SaveToken(context.Background(), &transport.Token{
+		TokenType:    "Bearer",
+		RefreshToken: "leftover-refresh",
+	}); err != nil {
+		t.Fatalf("SaveToken: %v", err)
+	}
+
+	cmd := &AuthStatusCmd{JSON: true}
+	stdout := captureStdout(t, func() {
+		if err := cmd.Run(&Context{Profile: "work"}); err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+	})
+
+	if !strings.Contains(stdout, `"oauth_status": "missing"`) {
+		t.Fatalf("expected missing status when access token empty, got: %s", stdout)
+	}
+	if strings.Contains(stdout, `"oauth_expires_at"`) {
+		t.Fatalf("expected no oauth_expires_at when access token empty, got: %s", stdout)
+	}
+}
+
 func TestAuthStatusJSONReportsLoginRequiredWithoutRefreshToken(t *testing.T) {
 	isolateAuthConfig(t)
 
