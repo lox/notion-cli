@@ -55,6 +55,43 @@ func TestLoadWithMetaReportsConfigTokenSource(t *testing.T) {
 	}
 }
 
+func TestLoadWithMetaDefaultDoesNotRequireHome(t *testing.T) {
+	xdgConfigHome := t.TempDir()
+	t.Setenv("HOME", "")
+	t.Setenv("XDG_CONFIG_HOME", xdgConfigHome)
+
+	// macOS and Windows resolve UserConfigDir from HOME, so this regression
+	// only surfaces on platforms (Linux containers, etc.) where ConfigDir
+	// can be satisfied via XDG_CONFIG_HOME without HOME.
+	configRoot, err := os.UserConfigDir()
+	if err != nil {
+		t.Skipf("UserConfigDir requires HOME on this platform: %v", err)
+	}
+
+	configDir := filepath.Join(configRoot, configDirName)
+	if err := os.MkdirAll(configDir, 0o700); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	configPath := filepath.Join(configDir, configFileName)
+	if err := os.WriteFile(configPath, []byte(`{"api":{"token":"config-token"}}`), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	loaded, err := LoadWithMeta(APIOverrides{})
+	if err != nil {
+		t.Fatalf("LoadWithMeta: %v", err)
+	}
+	if loaded.Profile != DefaultProfile() {
+		t.Fatalf("Profile = %q, want %q", loaded.Profile, DefaultProfile())
+	}
+	if loaded.Path != configPath {
+		t.Fatalf("Path = %q, want %q", loaded.Path, configPath)
+	}
+	if loaded.Config.API.Token != "config-token" {
+		t.Fatalf("Token = %q, want config-token", loaded.Config.API.Token)
+	}
+}
+
 func TestLoadWithMetaEnvOverrideWins(t *testing.T) {
 	isolateConfigDir(t)
 	if err := SetAPIToken("config-token"); err != nil {

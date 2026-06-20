@@ -104,11 +104,7 @@ func PathForProfile(profile string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	profileDir, err := profileBaseDir(resolvedProfile)
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(profileDir, configFileName), nil
+	return configPathForResolvedProfile(resolvedProfile)
 }
 
 func PathsForProfile(profile string) (ProfilePaths, error) {
@@ -150,6 +146,14 @@ func profileBaseDir(resolvedProfile string) (string, error) {
 		return baseDir, nil
 	}
 	return filepath.Join(baseDir, profilesDirName, resolvedProfile), nil
+}
+
+func configPathForResolvedProfile(resolvedProfile string) (string, error) {
+	profileDir, err := profileBaseDir(resolvedProfile)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(profileDir, configFileName), nil
 }
 
 // legacyDefaultTokenPath preserves the pre-profile OAuth token location.
@@ -407,11 +411,14 @@ func Load() (Config, error) {
 
 func LoadWithMeta(overrides APIOverrides) (LoadedConfig, error) {
 	cfg := Default()
-	paths, err := PathsForProfile(overrides.Profile)
+	resolvedProfile, err := ResolveProfile(overrides.Profile)
 	if err != nil {
 		return LoadedConfig{}, err
 	}
-	path := paths.ConfigPath
+	path, err := configPathForResolvedProfile(resolvedProfile)
+	if err != nil {
+		return LoadedConfig{}, err
+	}
 
 	fileCfg, err := loadFile(path)
 	if err != nil {
@@ -431,7 +438,7 @@ func LoadWithMeta(overrides APIOverrides) (LoadedConfig, error) {
 	normalize(&cfg)
 	return LoadedConfig{
 		Config:         cfg,
-		Profile:        paths.Profile,
+		Profile:        resolvedProfile,
 		Path:           path,
 		APITokenSource: source,
 		HasConfigToken: strings.TrimSpace(fileCfg.API.Token) != "",
