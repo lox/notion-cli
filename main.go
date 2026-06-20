@@ -6,6 +6,7 @@ import (
 	"github.com/alecthomas/kong"
 	"github.com/lox/notion-cli/cmd"
 	"github.com/lox/notion-cli/internal/cli"
+	"github.com/lox/notion-cli/internal/config"
 )
 
 var version = "dev"
@@ -23,8 +24,12 @@ func main() {
 		kong.UsageOnError(),
 		kong.Vars{"version": version},
 	)
+	profile, err := config.ResolveSelectedProfile(c.Profile)
+	ctx.FatalIfErrorf(err)
 	cli.SetAccessToken(c.Token)
-	err := ctx.Run(&cmd.Context{
+	cli.SetProfile(profile)
+	err = ctx.Run(&cmd.Context{
+		Profile:          profile,
 		Token:            c.Token,
 		APIToken:         c.APIToken,
 		APIBaseURL:       c.APIBaseURL,

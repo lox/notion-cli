@@ -31,6 +31,7 @@ type ClientOption func(*clientConfig)
 type clientConfig struct {
 	endpoint    string
 	accessToken string
+	profile     string
 }
 
 func WithEndpoint(endpoint string) ClientOption {
@@ -45,6 +46,12 @@ func WithAccessToken(token string) ClientOption {
 	}
 }
 
+func WithProfile(profile string) ClientOption {
+	return func(c *clientConfig) {
+		c.profile = profile
+	}
+}
+
 func NewClient(opts ...ClientOption) (*Client, error) {
 	cfg := &clientConfig{
 		endpoint: DefaultEndpoint,
@@ -53,7 +60,7 @@ func NewClient(opts ...ClientOption) (*Client, error) {
 		opt(cfg)
 	}
 
-	tokenStore, err := NewFileTokenStore()
+	tokenStore, err := NewFileTokenStore(cfg.profile)
 	if err != nil {
 		return nil, fmt.Errorf("create token store: %w", err)
 	}
@@ -191,7 +198,7 @@ func (c *Client) Search(ctx context.Context, query string, opts *SearchOptions) 
 
 func buildSearchToolArgs(query string, opts *SearchOptions) map[string]any {
 	args := map[string]any{}
-	if strings.TrimSpace(query) != "" {
+	if query = strings.TrimSpace(query); query != "" {
 		args["query"] = query
 	}
 	if opts != nil && opts.ContentSearchMode != "" {

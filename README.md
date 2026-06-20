@@ -174,6 +174,39 @@ The CLI uses Notion's remote MCP server with OAuth authentication. On first run,
 
 **Note:** Access tokens expire after 1 hour. The CLI automatically refreshes tokens when they expire or are about to expire, so you typically don't need to think about this. Use `notion-cli auth refresh` to manually refresh if needed.
 
+### Profiles
+
+Every command accepts `--profile <name>` (or `NOTION_CLI_PROFILE`) to scope the OAuth token and official API config to a specific Notion account, so you can keep separate logins for `work`, `home`, etc.
+
+```bash
+# Log in to a named profile
+notion-cli auth login --profile work
+
+# Use the profile for a single command
+notion-cli page list --profile work
+
+# Pin a profile for the shell session
+export NOTION_CLI_PROFILE=work
+
+# Make a profile the default for future invocations
+notion-cli auth use work
+```
+
+Profile resolution, highest priority first:
+
+1. `--profile <name>` flag
+2. `NOTION_CLI_PROFILE` environment variable
+3. Active profile from `notion-cli auth use <name>`
+4. Implicit default profile
+
+The default profile keeps using the existing OAuth token path, so existing single-account installs need no migration. `notion-cli auth use <name>` stores the active profile in the cross-profile config directory.
+
+Profile names must start and end with a lowercase ASCII letter or number. They may contain lowercase letters, numbers, at signs, dots, underscores, and hyphens.
+
+Named profiles store their credentials under `~/.config/notion-cli/profiles/<profile>/{token,config}.json`.
+
+`notion-cli auth status` prints the selected profile and token path, and `notion-cli auth list` shows all known profiles with OAuth and API-token status.
+
 ## Environment Variables
 
 | Variable | Description |
@@ -182,6 +215,7 @@ The CLI uses Notion's remote MCP server with OAuth authentication. On first run,
 | `NOTION_API_TOKEN` | Official Notion API token used for upload fallback and verification |
 | `NOTION_API_BASE_URL` | Override the official Notion API base URL |
 | `NOTION_API_NOTION_VERSION` | Override the official Notion API version |
+| `NOTION_CLI_PROFILE` | Default profile when `--profile` is not passed |
 
 ## How It Works
 

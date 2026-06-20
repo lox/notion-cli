@@ -12,10 +12,15 @@ import (
 )
 
 var accessToken string
+var profile string
 var authRefreshNoticeWriter io.Writer = os.Stderr
 
 func SetAccessToken(token string) {
 	accessToken = token
+}
+
+func SetProfile(value string) {
+	profile = value
 }
 
 func GetClient() (*mcp.Client, error) {
@@ -33,6 +38,7 @@ func GetClient() (*mcp.Client, error) {
 	if accessToken != "" {
 		opts = append(opts, mcp.WithAccessToken(accessToken))
 	}
+	opts = append(opts, mcp.WithProfile(profile))
 
 	client, err := mcp.NewClient(opts...)
 	if err != nil {
@@ -51,7 +57,7 @@ func GetClient() (*mcp.Client, error) {
 }
 
 func autoRefreshIfNeeded(ctx context.Context) error {
-	tokenStore, err := mcp.NewFileTokenStore()
+	tokenStore, err := mcp.NewFileTokenStore(profile)
 	if err != nil {
 		return err
 	}
@@ -67,7 +73,7 @@ func autoRefreshIfNeeded(ctx context.Context) error {
 			return fmt.Errorf("token expired and no refresh token available")
 		}
 
-		_, err := mcp.RefreshToken(ctx, tokenStore)
+		_, err := mcp.RefreshTokenIfNeeded(ctx, tokenStore)
 		if err != nil {
 			return fmt.Errorf("auto-refresh failed: %w", err)
 		}

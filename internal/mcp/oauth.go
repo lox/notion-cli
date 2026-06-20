@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os/exec"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/mark3labs/mcp-go/client"
@@ -19,6 +20,12 @@ import (
 )
 
 const callbackPath = "/callback"
+
+const refreshSkew = 5 * time.Minute
+
+type refreshTokenFunc func(context.Context, *FileTokenStore, *transport.Token) (*transport.Token, error)
+
+var refreshOAuthToken refreshTokenFunc = refreshTokenWithNotion
 
 func GenerateCodeVerifier() (string, error) {
 	b := make([]byte, 32)
@@ -201,11 +208,83 @@ func RunOAuthFlow(ctx context.Context, tokenStore *FileTokenStore) error {
 }
 
 func RefreshToken(ctx context.Context, tokenStore *FileTokenStore) (*transport.Token, error) {
-	token, err := tokenStore.GetToken(ctx)
+	return refreshTokenLocked(ctx, tokenStore, true)
+}
+
+func RefreshTokenIfNeeded(ctx context.Context, tokenStore *FileTokenStore) (*transport.Token, error) {
+	return refreshTokenLocked(ctx, tokenStore, false)
+}
+
+func refreshTokenLocked(ctx context.Context, tokenStore *FileTokenStore, force bool) (*transport.Token, error) {
+	var refreshed *transport.Token
+	err := tokenStore.WithLock(ctx, func() error {
+		token, err := tokenStore.GetToken(ctx)
+		if err != nil {
+			return fmt.Errorf("get token: %w", err)
+		}
+
+		if !force && tokenFresh(token) {
+			refreshed = token
+			return nil
+		}
+
+		newToken, err := refreshOAuthToken(ctx, tokenStore, token)
+		if err != nil {
+			if isInvalidGrantError(err) {
+				latest, latestErr := tokenStore.GetToken(ctx)
+				if latestErr == nil && tokenFresh(latest) && !sameToken(latest, token) {
+					refreshed = latest
+					return nil
+				}
+				return fmt.Errorf("refresh token was rejected; browser login required: %w", err)
+			}
+			return err
+		}
+
+		if err := tokenStore.SaveToken(ctx, newToken); err != nil {
+			return fmt.Errorf("save token: %w", err)
+		}
+		refreshed = newToken
+		return nil
+	})
 	if err != nil {
-		return nil, fmt.Errorf("get token: %w", err)
+		return nil, err
+	}
+	if refreshed == nil {
+		return nil, errors.New("refresh did not return a token")
+	}
+	return refreshed, nil
+}
+
+func tokenFresh(token *transport.Token) bool {
+	return token != nil &&
+		token.AccessToken != "" &&
+		(token.ExpiresAt.IsZero() || token.ExpiresAt.After(time.Now().Add(refreshSkew)))
+}
+
+func sameToken(a, b *transport.Token) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return a.AccessToken == b.AccessToken &&
+		a.RefreshToken == b.RefreshToken &&
+		a.ExpiresAt.Equal(b.ExpiresAt)
+}
+
+func isInvalidGrantError(err error) bool {
+	if err == nil {
+		return false
 	}
 
+	var oauthErr transport.OAuthError
+	if errors.As(err, &oauthErr) && oauthErr.ErrorCode == "invalid_grant" {
+		return true
+	}
+
+	return strings.Contains(err.Error(), "invalid_grant")
+}
+
+func refreshTokenWithNotion(ctx context.Context, tokenStore *FileTokenStore, token *transport.Token) (*transport.Token, error) {
 	if token.RefreshToken == "" {
 		return nil, errors.New("no refresh token available")
 	}
@@ -247,10 +326,6 @@ func RefreshToken(ctx context.Context, tokenStore *FileTokenStore) (*transport.T
 	newToken, err := handler.RefreshToken(ctx, token.RefreshToken)
 	if err != nil {
 		return nil, fmt.Errorf("refresh token: %w", err)
-	}
-
-	if err := tokenStore.SaveToken(ctx, newToken); err != nil {
-		return nil, fmt.Errorf("save token: %w", err)
 	}
 
 	return newToken, nil

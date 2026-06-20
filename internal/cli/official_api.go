@@ -9,6 +9,7 @@ import (
 
 type OfficialAPIConfig struct {
 	Config         config.Config
+	Profile        string
 	ConfigPath     string
 	APITokenSource string
 	HasConfigToken bool
@@ -21,6 +22,7 @@ func LoadOfficialAPIConfig(overrides config.APIOverrides) (*OfficialAPIConfig, e
 	}
 	return &OfficialAPIConfig{
 		Config:         loaded.Config,
+		Profile:        loaded.Profile,
 		ConfigPath:     loaded.Path,
 		APITokenSource: loaded.APITokenSource,
 		HasConfigToken: loaded.HasConfigToken,
