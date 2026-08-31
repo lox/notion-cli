@@ -311,24 +311,38 @@ func (c *Client) CreatePage(ctx context.Context, req CreatePageRequest) (*Create
 
 	text := extractText(result)
 
-	var resp CreatePageResponse
-	if err := json.Unmarshal([]byte(text), &resp); err == nil && resp.URL != "" {
-		return &resp, nil
-	}
-
-	url := extractURLFromText(text)
-	return &CreatePageResponse{URL: url}, nil
+	return parseCreatePageResponse(text), nil
 }
 
-func extractURLFromText(text string) string {
-	if idx := strings.Index(text, "https://www.notion.so/"); idx >= 0 {
-		end := idx
-		for end < len(text) && text[end] != ' ' && text[end] != '\n' && text[end] != '"' && text[end] != ')' && text[end] != '>' {
-			end++
-		}
-		return text[idx:end]
+// parseCreatePageResponse reads the created page out of the tool result. The
+// server answers with a pages array, and falls back to prose on some page
+// shapes, so the URL is recovered from the text when the array is absent.
+func parseCreatePageResponse(text string) *CreatePageResponse {
+	var wrapper struct {
+		Pages []CreatePageResponse `json:"pages"`
 	}
-	return ""
+	if err := json.Unmarshal([]byte(text), &wrapper); err == nil && len(wrapper.Pages) > 0 {
+		page := wrapper.Pages[0]
+		if page.URL != "" || page.ID != "" {
+			return &page
+		}
+	}
+
+	var resp CreatePageResponse
+	if err := json.Unmarshal([]byte(text), &resp); err == nil && (resp.URL != "" || resp.ID != "") {
+		return &resp
+	}
+
+	return &CreatePageResponse{URL: extractURLFromText(text)}
+}
+
+// notionURLPattern matches a page URL on any Notion host. The MCP server
+// answers with app.notion.com, while shared links and older responses use
+// www.notion.so.
+var notionURLPattern = regexp.MustCompile(`https://[a-zA-Z0-9.-]*notion\.(?:so|com)/[^\s"')>]+`)
+
+func extractURLFromText(text string) string {
+	return notionURLPattern.FindString(text)
 }
 
 // ResolveDataSourceID fetches a database by ID and extracts the data source ID
