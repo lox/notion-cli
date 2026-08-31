@@ -48,6 +48,18 @@ notion-cli auth api unset
 
 For CI/headless environments, set `NOTION_API_TOKEN`.
 
+This is a separate credential from the OAuth one above, and one does not stand
+in for the other: the OAuth token authorizes the MCP server and is rejected by
+`api.notion.com` with a 401. The official API expects an internal integration
+secret, in the `ntn_…` form, created at
+https://www.notion.so/profile/integrations/internal.
+
+An internal integration only reaches the pages it is explicitly connected to,
+through the page's `•••` menu under Connections, and the connection is inherited
+by child pages. A valid token on an unconnected page fails with
+`object_not_found`, so grant the connection at the highest parent the workflow
+touches.
+
 ### Multiple accounts
 
 Every command accepts `--profile <name>` (or `NOTION_CLI_PROFILE`) to target a specific Notion account. Named profiles keep credentials isolated under `~/.config/notion-cli/profiles/<profile>/`; the implicit default profile uses the existing top-level paths.
@@ -69,7 +81,8 @@ notion-cli page            # Manage pages (list, view, create, upload, edit)
 notion-cli db              # Manage databases (list, query, create entries)
 notion-cli search          # Search the workspace
 notion-cli comment         # Manage comments (list, create)
-notion-cli tools           # List available MCP tools
+notion-cli user             # List workspace users
+notion-cli tools            # List available MCP tools
 ```
 
 ## Common Operations
@@ -124,6 +137,15 @@ notion-cli page sync ./document.md --title "Custom Title"
 notion-cli page edit <page> --replace "New content"
 notion-cli page edit <page> --find "old text" --replace-with "new text"
 notion-cli page edit <page> --find "section" --append "additional content"
+notion-cli page edit <page> -P "Status=Done" -P "Priority=1"   # Update properties
+
+# Move a page under a new parent
+notion-cli page move <page> --parent "Engineering"      # Parent page by name, URL, or ID
+notion-cli page move <page> --parent-db <db-id>         # Move into a database
+
+# Duplicate a page
+notion-cli page duplicate <page>
+notion-cli page duplicate <page> --json
 
 # Archive a page
 notion-cli page archive https://notion.so/...
@@ -134,7 +156,7 @@ For `page upload` and `page sync`, standalone local markdown image lines like `!
 
 `page view` shows open page-level comments and inline block discussions by default. Inline discussions are rendered beside their anchor text, with the anchor wrapped in `[[...]]` and the discussion shown immediately below it. Use `--no-comments` when you only want the page body, `--raw` to inspect the original Notion markup, and `--json` when an agent needs the page plus the `Comments` array.
 
-`page archive` uses the official API fallback path and requires `notion-cli auth api setup` or `NOTION_API_TOKEN`.
+`page archive` uses the official API fallback path and requires `notion-cli auth api setup` or `NOTION_API_TOKEN`. The MCP server exposes no tool that trashes a page, so this is the only way to remove one; without the integration secret, the closest an MCP-only session gets is `page move`, gathering throwaway pages under a single parent for a human to delete.
 
 ### Edit mode guardrails
 
@@ -143,8 +165,25 @@ For `page upload` and `page sync`, standalone local markdown image lines like `!
 1. `--replace "..."` for full-page replacement.
 2. `--find "..." --replace-with "..."` for targeted replacement.
 3. `--find "..." --append "..."` for append-after-match.
+4. `-P key=value` (repeatable) for property updates, including the title.
 
 When a targeted edit fails (for example MCP validation errors), fall back to full replacement by fetching content, editing locally, then applying `--replace`.
+
+`page move` takes exactly one of `--parent` or `--parent-db`. `page duplicate` copies the page, its child pages, and its explicit permissions under the same parent, so it is the way to obtain a page that keeps a permission grant the parent does not hand down.
+
+### Users
+
+```bash
+notion-cli user list                        # List workspace users (paginated)
+notion-cli user list --query alice           # Filter by name or email
+notion-cli user list --limit 20              # Cap the number of users returned
+notion-cli user list --json                 # Output as JSON
+notion-cli user me                          # Show the user the token authenticates as
+```
+
+`user list` follows the server cursor until the workspace is exhausted, so large
+workspaces return every member rather than only the first page. Use `--query` to
+let the server filter instead of paging through everything.
 
 ### Databases
 

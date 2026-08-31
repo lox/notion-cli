@@ -45,3 +45,10 @@ type Comment struct {
 	CreatedByName  string
 	Content        string
 }
+
+type User struct {
+	ID    string
+	Name  string
+	Type  string
+	Email string
+}
