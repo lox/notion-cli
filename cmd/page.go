@@ -15,13 +15,15 @@ import (
 )
 
 type PageCmd struct {
-	List    PageListCmd    `cmd:"" help:"List pages"`
-	View    PageViewCmd    `cmd:"" help:"View a page"`
-	Create  PageCreateCmd  `cmd:"" help:"Create a page"`
-	Upload  PageUploadCmd  `cmd:"" help:"Upload a markdown file as a page"`
-	Sync    PageSyncCmd    `cmd:"" help:"Sync a markdown file to a page (create or update)"`
-	Edit    PageEditCmd    `cmd:"" help:"Edit a page"`
-	Archive PageArchiveCmd `cmd:"" help:"Archive a page via the official API"`
+	List      PageListCmd      `cmd:"" help:"List pages"`
+	View      PageViewCmd      `cmd:"" help:"View a page"`
+	Create    PageCreateCmd    `cmd:"" help:"Create a page"`
+	Upload    PageUploadCmd    `cmd:"" help:"Upload a markdown file as a page"`
+	Sync      PageSyncCmd      `cmd:"" help:"Sync a markdown file to a page (create or update)"`
+	Edit      PageEditCmd      `cmd:"" help:"Edit a page"`
+	Archive   PageArchiveCmd   `cmd:"" help:"Archive a page via the official API"`
+	Move      PageMoveCmd      `cmd:"" help:"Move a page under a new parent"`
+	Duplicate PageDuplicateCmd `cmd:"" help:"Duplicate a page with its children and permissions"`
 }
 
 var loadPageViewCommentsFn = loadPageViewComments
@@ -828,4 +830,122 @@ func runPageSync(ctx *Context, file, title, parent, parentDB, icon string, skipL
 		output.PrintInfo(resp.URL)
 	}
 	return nil
+}
+
+type PageMoveCmd struct {
+	Page     string `arg:"" help:"Page URL, name, or ID"`
+	Parent   string `help:"New parent page URL, name, or ID" short:"p"`
+	ParentDB string `help:"New parent database URL, name, or ID" name:"parent-db" short:"d"`
+}
+
+func (c *PageMoveCmd) Run(ctx *Context) error {
+	return runPageMove(ctx, c.Page, c.Parent, c.ParentDB)
+}
+
+func runPageMove(ctx *Context, page, parent, parentDB string) error {
+	if (parent == "") == (parentDB == "") {
+		err := &output.UserError{Message: "specify exactly one of --parent or --parent-db"}
+		output.PrintError(err)
+		return err
+	}
+
+	client, err := cli.RequireClient()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = client.Close() }()
+
+	bgCtx := context.Background()
+
+	pageID, err := cli.ResolvePageID(bgCtx, client, page)
+	if err != nil {
+		output.PrintError(err)
+		return err
+	}
+
+	req := mcp.MovePageRequest{PageID: pageID}
+	if parent != "" {
+		parentID, err := cli.ResolvePageID(bgCtx, client, parent)
+		if err != nil {
+			output.PrintError(err)
+			return err
+		}
+		req.ParentPageID = parentID
+	} else {
+		databaseID, err := cli.ResolveDatabaseID(bgCtx, client, parentDB)
+		if err != nil {
+			output.PrintError(err)
+			return err
+		}
+		dataSourceID, err := client.ResolveDataSourceID(bgCtx, databaseID)
+		if err != nil {
+			output.PrintError(err)
+			return err
+		}
+		req.ParentDatabaseID = dataSourceID
+	}
+
+	if err := client.MovePage(bgCtx, req); err != nil {
+		output.PrintError(err)
+		return err
+	}
+
+	output.PrintSuccess("Page moved")
+	return nil
+}
+
+type PageDuplicateCmd struct {
+	Page string `arg:"" help:"Page URL, name, or ID"`
+	JSON bool   `help:"Output as JSON" short:"j"`
+}
+
+func (c *PageDuplicateCmd) Run(ctx *Context) error {
+	ctx.JSON = c.JSON
+	return runPageDuplicate(ctx, c.Page)
+}
+
+func runPageDuplicate(ctx *Context, page string) error {
+	client, err := cli.RequireClient()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = client.Close() }()
+
+	bgCtx := context.Background()
+
+	pageID, err := cli.ResolvePageID(bgCtx, client, page)
+	if err != nil {
+		output.PrintError(err)
+		return err
+	}
+
+	resp, err := client.DuplicatePage(bgCtx, pageID)
+	if err != nil {
+		output.PrintError(err)
+		return err
+	}
+
+	if ctx.JSON {
+		return output.PrintPage(duplicatedPage(resp), true)
+	}
+
+	if resp.URL != "" {
+		output.PrintSuccess("Page duplicated: " + resp.URL)
+	} else {
+		output.PrintSuccess("Page duplicated")
+	}
+	return nil
+}
+
+// duplicatedPage describes the copy for JSON output. The MCP server may answer
+// with prose carrying only the URL, so the ID is recovered from it to keep the
+// copy addressable by the next command.
+func duplicatedPage(resp *mcp.DuplicatePageResponse) output.Page {
+	page := output.Page{ID: resp.ID, URL: resp.URL}
+	if page.ID == "" && page.URL != "" {
+		if id, ok := cli.ExtractNotionUUID(page.URL); ok {
+			page.ID = id
+		}
+	}
+	return page
 }

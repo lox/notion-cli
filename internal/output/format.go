@@ -279,3 +279,21 @@ func formatType(t string) string {
 		return t
 	}
 }
+
+func PrintUsers(users []User, asJSON bool) error {
+	if asJSON {
+		return printJSON(users)
+	}
+
+	if len(users) == 0 {
+		fmt.Println("No users found.")
+		return nil
+	}
+
+	table := NewTable("ID", "NAME", "TYPE", "EMAIL")
+	for _, u := range users {
+		table.AddRow(TruncateID(u.ID), Truncate(u.Name, 40), formatType(u.Type), u.Email)
+	}
+	table.Render()
+	return nil
+}

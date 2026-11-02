@@ -81,6 +81,11 @@ notion-cli page create --title "T" --content "Body text"
 notion-cli page create --title "T" --parent <page-id>
 notion-cli page archive <page-url-or-id>       # Archive a page via the official API
 
+notion-cli page move <page> --parent "Engineering"   # Move under another page
+notion-cli page move <page> --parent-db <db-id>      # Move into a database
+notion-cli page duplicate <page>               # Copy a page with children and permissions
+notion-cli page duplicate <page> --json        # Output the copy as JSON
+
 # Upload a markdown file as a new page
 notion-cli page upload ./document.md                        # Title from # heading or filename
 notion-cli page upload ./document.md --title "Custom Title" # Explicit title
@@ -160,6 +165,11 @@ The comment commands accept a page URL, ID, or name. `comment list` includes bot
 ### Other
 
 ```bash
+notion-cli user list                           # List workspace users (paginated)
+notion-cli user list --query alice             # Filter by name or email
+notion-cli user list --limit 20                # Cap the number of users returned
+notion-cli user list --json                    # Output users as JSON
+notion-cli user me                             # Show the user the token authenticates as
 notion-cli tools                               # List available MCP tools
 notion-cli tools --json                        # Output tools as JSON
 notion-cli version                             # Show version
