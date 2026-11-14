@@ -196,10 +196,12 @@ func (c *Client) Search(ctx context.Context, query string, opts *SearchOptions) 
 	return &resp, nil
 }
 
+// buildSearchToolArgs always sends query: notion-search requires it. An empty
+// query lists recently viewed pages and databases, which page list and db list
+// show when no query is given.
 func buildSearchToolArgs(query string, opts *SearchOptions) map[string]any {
-	args := map[string]any{}
-	if query = strings.TrimSpace(query); query != "" {
-		args["query"] = query
+	args := map[string]any{
+		"query": strings.TrimSpace(query),
 	}
 	if opts != nil && opts.ContentSearchMode != "" {
 		args["content_search_mode"] = opts.ContentSearchMode
