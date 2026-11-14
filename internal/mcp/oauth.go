@@ -332,18 +332,27 @@ func refreshTokenWithNotion(ctx context.Context, tokenStore *FileTokenStore, tok
 }
 
 func OpenBrowser(url string) error {
-	var cmd *exec.Cmd
-
-	switch runtime.GOOS {
-	case "darwin":
-		cmd = exec.Command("open", url)
-	case "linux":
-		cmd = exec.Command("xdg-open", url)
-	case "windows":
-		cmd = exec.Command("cmd", "/c", "start", url)
-	default:
-		return fmt.Errorf("unsupported platform: %s", runtime.GOOS)
+	name, args, err := browserCommand(runtime.GOOS, url)
+	if err != nil {
+		return err
 	}
 
-	return cmd.Start()
+	return exec.Command(name, args...).Start()
+}
+
+// browserCommand returns the command that opens url in the default browser.
+// On Windows it does not use cmd /c start: cmd treats & as a command
+// separator, so the authorization URL would end at its first & and Notion
+// would reject it without the redirect_uri parameter.
+func browserCommand(goos, url string) (string, []string, error) {
+	switch goos {
+	case "darwin":
+		return "open", []string{url}, nil
+	case "linux":
+		return "xdg-open", []string{url}, nil
+	case "windows":
+		return "rundll32", []string{"url.dll,FileProtocolHandler", url}, nil
+	default:
+		return "", nil, fmt.Errorf("unsupported platform: %s", goos)
+	}
 }

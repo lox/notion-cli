@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -235,5 +236,36 @@ func saveExpiredToken(t *testing.T, store *FileTokenStore) {
 		ExpiresAt:    time.Now().Add(-time.Hour),
 	}); err != nil {
 		t.Fatalf("SaveToken: %v", err)
+	}
+}
+
+func TestBrowserCommandPassesWholeURL(t *testing.T) {
+	url := "https://mcp.notion.com/authorize?response_type=code&client_id=abc&redirect_uri=http%3A%2F%2Flocalhost%3A8080%2Fcallback&state=xyz"
+	tests := []struct {
+		goos string
+		name string
+		args []string
+	}{
+		{goos: "darwin", name: "open", args: []string{url}},
+		{goos: "linux", name: "xdg-open", args: []string{url}},
+		{goos: "windows", name: "rundll32", args: []string{"url.dll,FileProtocolHandler", url}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.goos, func(t *testing.T) {
+			name, args, err := browserCommand(tt.goos, url)
+			if err != nil {
+				t.Fatalf("browserCommand: %v", err)
+			}
+			if name != tt.name || !reflect.DeepEqual(args, tt.args) {
+				t.Fatalf("got %s %q, want %s %q", name, args, tt.name, tt.args)
+			}
+		})
+	}
+}
+
+func TestBrowserCommandRejectsUnsupportedPlatform(t *testing.T) {
+	if _, _, err := browserCommand("plan9", "https://example.com"); err == nil {
+		t.Fatal("expected an error for an unsupported platform")
 	}
 }
