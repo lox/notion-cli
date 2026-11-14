@@ -9,6 +9,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/client/transport"
@@ -464,8 +466,12 @@ func buildGetCommentsToolArgs(req GetCommentsRequest) map[string]any {
 	return args
 }
 
+// commentsXMLWrapper is the JSON object notion-get-comments returns. Text holds
+// the discussions as XML and is absent when the page has none.
+// SuggestedEditsStatus is set on every response.
 type commentsXMLWrapper struct {
-	Text string `json:"text"`
+	Text                 string `json:"text"`
+	SuggestedEditsStatus string `json:"suggested_edits_status"`
 }
 
 type discussionsXML struct {
@@ -507,6 +513,11 @@ func parseCommentsResponse(text string) (*CommentsResponse, error) {
 		if strings.Contains(trimmed, `"comments"`) || strings.Contains(trimmed, `"next_cursor"`) || strings.Contains(trimmed, `"has_more"`) {
 			return &resp, nil
 		}
+		// A page without discussions returns only the status, e.g.
+		// {"suggested_edits_status":"included"}.
+		if wrapper.SuggestedEditsStatus != "" {
+			return &CommentsResponse{}, nil
+		}
 	}
 
 	return nil, fmt.Errorf("parse comments: unsupported response format")
@@ -547,8 +558,11 @@ func parseCommentsXML(text string) (*CommentsResponse, error) {
 	return &CommentsResponse{Comments: comments}, nil
 }
 
+// extractCommentUserID returns the user ID from a user URL, which is either
+// user://<id> or user://<id>/<email>.
 func extractCommentUserID(userURL string) string {
-	return strings.TrimPrefix(userURL, "user://")
+	id, _, _ := strings.Cut(strings.TrimPrefix(userURL, "user://"), "/")
+	return id
 }
 
 func extractCommentBodyText(body string) string {
@@ -702,24 +716,52 @@ func sanitiseCommentsXML(text string) string {
 	var out strings.Builder
 	out.Grow(len(text))
 
+	// Comment bodies are Notion Markdown, which writes a literal < as \<.
+	backslashes := 0
 	for i := 0; i < len(text); i++ {
-		if text[i] != '&' {
-			out.WriteByte(text[i])
-			continue
+		c := text[i]
+		switch c {
+		case '&':
+			if entity, width, ok := parseXMLEntity(text[i+1:]); ok {
+				out.WriteByte('&')
+				out.WriteString(entity)
+				out.WriteByte(';')
+				i += width
+			} else {
+				out.WriteString("&amp;")
+			}
+		case '<':
+			if backslashes%2 == 1 || !startsXMLMarkup(text[i+1:]) {
+				out.WriteString("&lt;")
+			} else {
+				out.WriteByte('<')
+			}
+		default:
+			out.WriteByte(c)
 		}
 
-		if entity, width, ok := parseXMLEntity(text[i+1:]); ok {
-			out.WriteByte('&')
-			out.WriteString(entity)
-			out.WriteByte(';')
-			i += width
-			continue
+		if c == '\\' {
+			backslashes++
+		} else {
+			backslashes = 0
 		}
-
-		out.WriteString("&amp;")
 	}
 
 	return out.String()
+}
+
+// startsXMLMarkup reports whether text, which follows a <, starts a tag, a
+// comment, CDATA or a processing instruction.
+func startsXMLMarkup(text string) bool {
+	if text == "" {
+		return false
+	}
+	switch text[0] {
+	case '/', '!', '?':
+		return true
+	}
+	r, _ := utf8.DecodeRuneInString(text)
+	return r == '_' || r == ':' || unicode.IsLetter(r)
 }
 
 func parseXMLEntity(text string) (entity string, width int, ok bool) {

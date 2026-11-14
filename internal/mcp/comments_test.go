@@ -217,6 +217,74 @@ func TestParseCommentsResponseXMLWrapperWithPrettyPrintedParagraphHTML(t *testin
 	}
 }
 
+func TestParseCommentsResponseWithSuggestedEditsStatus(t *testing.T) {
+	raw := `{"suggested_edits_status":"included","text":"<discussions total-count=\"1\" shown-count=\"1\">\n<discussion id=\"discussion://page/block/discussion\" comment-count=\"2\" total-comment-count=\"2\" resolved=\"false\" type=\"comment\" context=\"inline\" text-context=\"Restore time\">\n<comment id=\"comment-1\" url=\"https://app.notion.com/p/page?d=discussion&amp;pvs=42#block\" user-url=\"user://user-123/someone@example.com\" datetime=\"2026-06-16T12:13:09.656Z\">Restore takes \\<15 min, not \\~4 h</comment>\n<comment id=\"comment-2\" url=\"https://app.notion.com/p/page?d=discussion&amp;pvs=42#block\" user-url=\"user://user-456/other@example.com\" datetime=\"2026-06-16T13:36:49.639Z\" by-you=\"true\"><mention url=\"user://user-123/someone@example.com\">Someone</mention> agreed<br />see 4.1</comment>\n</discussion>\n</discussions>"}`
+
+	resp, err := parseCommentsResponse(raw)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(resp.Comments) != 2 {
+		t.Fatalf("expected 2 comments, got %d", len(resp.Comments))
+	}
+
+	first, second := resp.Comments[0], resp.Comments[1]
+	if first.CreatedBy.ID != "user-123" {
+		t.Fatalf("expected author ID %q, got %q", "user-123", first.CreatedBy.ID)
+	}
+	if got := first.RichText[0].PlainText; got != `Restore takes \<15 min, not \~4 h` {
+		t.Fatalf("expected escaped less-than sign to stay text, got %q", got)
+	}
+	if first.Context != "Restore time" {
+		t.Fatalf("expected context %q, got %q", "Restore time", first.Context)
+	}
+	if second.CreatedBy.ID != "user-456" {
+		t.Fatalf("expected author ID %q, got %q", "user-456", second.CreatedBy.ID)
+	}
+	if got := second.RichText[0].PlainText; got != "Someone agreed\nsee 4.1" {
+		t.Fatalf("expected mention text and line break, got %q", got)
+	}
+}
+
+func TestParseCommentsResponseWithoutDiscussions(t *testing.T) {
+	resp, err := parseCommentsResponse(`{"suggested_edits_status":"included"}`)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(resp.Comments) != 0 {
+		t.Fatalf("expected no comments, got %d", len(resp.Comments))
+	}
+}
+
+func TestParseCommentsResponseUnknownObject(t *testing.T) {
+	if _, err := parseCommentsResponse(`{"unexpected":true}`); err == nil {
+		t.Fatalf("expected an error for an unknown response")
+	}
+}
+
+func TestSanitiseCommentsXMLLessThanSign(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{name: "escaped before digit", in: `a \<15`, want: `a \&lt;15`},
+		{name: "escaped before letter", in: `a \<b`, want: `a \&lt;b`},
+		{name: "bare before space", in: `a < b`, want: `a &lt; b`},
+		{name: "at end", in: `a <`, want: `a &lt;`},
+		{name: "escaped backslash before tag", in: `a \\<br/>`, want: `a \\<br/>`},
+		{name: "tags", in: `<p>a</p><!-- c -->`, want: `<p>a</p><!-- c -->`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := sanitiseCommentsXML(tt.in); got != tt.want {
+				t.Fatalf("sanitiseCommentsXML(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestParseCommentsResponseEmptyObject(t *testing.T) {
 	resp, err := parseCommentsResponse(`{}`)
 	if err != nil {
